@@ -27,7 +27,7 @@ pipeline {
         stage('Test') {
             steps {
                 sh """
-                    python3.14 -m venv .venv
+                    /usr/local/bin/python3.14 -m venv .venv
                     .venv/bin/pip install -q --upgrade pip
                     .venv/bin/pip install -q -r requirements_test.txt
                     .venv/bin/python -m pytest tests/ \
