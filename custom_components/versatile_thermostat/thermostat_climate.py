@@ -1159,6 +1159,14 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
         self.choose_auto_fan_mode(self._auto_fan_mode)
 
     @property
+    def preset_mode(self) -> str | None:
+        """In native_preset_mode, return _attr_preset_mode (maintained by us in both
+        directions). Otherwise delegate to base which reads from state_manager."""
+        if self._native_preset_mode:
+            return self._attr_preset_mode
+        return super().preset_mode
+
+    @property
     def preset_modes(self) -> list[str] | None:
         """In native_preset_mode, return the underlying climate's own preset list
         dynamically (evaluated every time so timing of state availability doesn't matter).
