@@ -57,19 +57,6 @@ async def test_native_preset_mode_exposes_underlying_presets(
 
     await create_and_register_mock_climate(hass, "mock_climate", "MockClimateName", {})
 
-    # MockClimate doesn't declare PRESET_MODE in supported_features so HA's state
-    # machinery won't include preset_modes in the state attributes automatically.
-    # Set it manually — this is what a real heat pump would expose.
-    hass.states.async_set(
-        "climate.mock_climate",
-        "off",
-        {
-            "preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST],
-            "hvac_modes": ["off", "heat", "cool"],
-        },
-    )
-    await hass.async_block_till_done()
-
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="TheOverClimateMockName",
@@ -91,8 +78,19 @@ async def test_native_preset_mode_exposes_underlying_presets(
 
         await wait_for_local_condition(lambda: entity.is_ready is True)
 
+        # MockClimate doesn't declare PRESET_MODE in supported_features so HA's state
+        # machinery won't include preset_modes in the state attributes automatically.
+        # Set it AFTER VT is ready (setting before could be overwritten by mock entity
+        # re-writing its state during startup). The preset_modes property is dynamic
+        # (reads hass.states at call-time), so this is sufficient.
+        hass.states.async_set(
+            "climate.mock_climate",
+            "off",
+            {"preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]},
+        )
+        await hass.async_block_till_done()
+
         # VTherm must expose the underlying climate's presets — NOT VT's temp-based ones
-        assert entity.preset_modes is not None
         assert PRESET_COMFORT in entity.preset_modes
         assert PRESET_ECO in entity.preset_modes
         assert PRESET_BOOST in entity.preset_modes
