@@ -129,6 +129,7 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
         )
 
         self._native_preset_mode: bool = config_entry.get(CONF_NATIVE_PRESET_MODE, False)
+        self._native_current_preset: str | None = None  # tracks current preset in native_preset_mode
 
     @property
     def native_preset_mode(self) -> bool:
@@ -844,7 +845,7 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
             new_preset = new_state.attributes.get("preset_mode") if new_state.attributes else None
             if new_preset and new_preset != self._attr_preset_mode:
                 _LOGGER.info("%s - native_preset_mode: underlying preset changed to %s, mirroring", self, new_preset)
-                self._attr_preset_mode = new_preset
+                self._native_current_preset = new_preset
                 changes = True
 
         # Manage new target temperature set if state if no other changes have been found
@@ -1209,10 +1210,10 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
 
     @property
     def preset_mode(self) -> str | None:
-        """In native_preset_mode, return _attr_preset_mode (maintained by us in both
-        directions). Otherwise delegate to base which reads from state_manager."""
+        """In native_preset_mode, return _native_current_preset (maintained by us in
+        both directions). Otherwise delegate to base which reads from state_manager."""
         if self._native_preset_mode:
-            return self._attr_preset_mode
+            return self._native_current_preset
         return super().preset_mode
 
     @property
@@ -1260,8 +1261,8 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
                 blocking=True,
             )
 
-        # Update the reported preset_mode attribute so the UI reflects the change
-        self._attr_preset_mode = preset_mode
+        # Update our own preset tracker so preset_mode property reflects the change
+        self._native_current_preset = preset_mode
         self.async_write_ha_state()
 
     @overrides
