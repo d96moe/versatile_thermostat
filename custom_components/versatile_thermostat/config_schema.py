@@ -249,6 +249,7 @@ STEP_THERMOSTAT_CLIMATE = vol.Schema(  # pylint: disable=invalid-name
             )
         ),
         vol.Optional(CONF_AUTO_REGULATION_USE_DEVICE_TEMP, default=False): cv.boolean,
+        vol.Optional(CONF_NATIVE_PRESET_MODE, default=False): cv.boolean,
     }
 )
 
