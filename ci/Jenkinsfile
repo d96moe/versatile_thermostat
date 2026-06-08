@@ -1,0 +1,59 @@
+// =============================================================================
+// Jenkinsfile — versatile_thermostat fork (d96moe)
+// Runs the full pytest suite inside a Docker Python container.
+// Triggered on push to main/feature branches.
+// =============================================================================
+
+pipeline {
+    agent { label 'built-in' }
+
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to test')
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: "${params.BRANCH}",
+                    url: 'https://github.com/d96moe/versatile_thermostat.git'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh """
+                    docker run --rm \\
+                        -v "\$(pwd)":/workspace \\
+                        -w /workspace \\
+                        python:3.12-slim \\
+                        bash -c "
+                            pip install -q --use-feature=fast-deps -r requirements_test.txt &&
+                            python -m pytest tests/ \\
+                                -p no:cacheprovider \\
+                                --tb=short \\
+                                -q \\
+                                --junitxml=test-results.xml
+                        "
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            junit 'test-results.xml'
+        }
+        success {
+            echo 'All tests passed.'
+        }
+        failure {
+            echo 'Tests failed — check log above.'
+        }
+    }
+}
