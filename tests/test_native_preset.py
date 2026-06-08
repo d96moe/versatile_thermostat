@@ -9,8 +9,8 @@ When native_preset_mode=True:
 - Temperature can still be set manually and is unaffected by preset changes.
 """
 
-from unittest.mock import patch, call, AsyncMock
-from datetime import datetime, timedelta
+from unittest.mock import patch, AsyncMock
+from datetime import datetime
 
 from homeassistant.core import HomeAssistant
 from homeassistant.components.climate.const import (
@@ -119,15 +119,19 @@ async def test_native_preset_mode_sets_underlying_preset(
 
         initial_temp = entity.target_temperature
 
-        # Intercept calls to underlying climate
+        # Intercept the HA service call that forwards the preset to the underlying
         with patch.object(
-            fake_underlying_climate, "async_set_preset_mode", new_callable=AsyncMock
-        ) as mock_set_preset:
+            hass.services, "async_call", new_callable=AsyncMock
+        ) as mock_svc:
             await entity.async_set_preset_mode(PRESET_BOOST)
             await hass.async_block_till_done()
 
-            # Underlying climate must receive the preset
-            mock_set_preset.assert_called_once_with(PRESET_BOOST)
+            mock_svc.assert_called_once_with(
+                "climate",
+                "set_preset_mode",
+                {"entity_id": fake_underlying_climate.entity_id, "preset_mode": PRESET_BOOST},
+                blocking=True,
+            )
 
         # VTherm's target temperature must be unchanged
         assert entity.target_temperature == initial_temp

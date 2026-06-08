@@ -1198,23 +1198,21 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
 
         self.choose_auto_fan_mode(self._auto_fan_mode)
 
+    @property
+    def preset_modes(self) -> list[str] | None:
+        """In native_preset_mode, return the underlying climate's own preset list
+        dynamically (evaluated every time so timing of state availability doesn't matter).
+        Otherwise delegate to the base class."""
         if self._native_preset_mode:
-            self._apply_native_preset_list()
-
-    def _apply_native_preset_list(self):
-        """Replace VTherm's temperature-based preset list with the underlying climate's
-        own preset list. Called once the underlying climate entity is known."""
-        under = self.underlying_entity(0)
-        if under is None:
-            return
-        state = self._hass.states.get(under.entity_id)
-        native_presets = (state.attributes.get("preset_modes") if state else None) or []
-        if not native_presets:
-            _LOGGER.warning("%s - native_preset_mode: underlying climate has no presets", self)
-            return
-        self._attr_preset_modes = list(native_presets)
-        self._vtherm_preset_modes = []  # VT temp-presets are not used
-        _LOGGER.info("%s - native_preset_mode: using underlying presets %s", self, self._attr_preset_modes)
+            under = self.underlying_entity(0) if self._underlyings else None
+            if under is not None:
+                state = self._hass.states.get(under.entity_id)
+                if state:
+                    native_presets = state.attributes.get("preset_modes")
+                    if native_presets:
+                        return list(native_presets)
+            return []
+        return super().preset_modes
 
     @overrides
     async def async_set_preset_mode(self, preset_mode: str):
@@ -1224,7 +1222,7 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
             await super().async_set_preset_mode(preset_mode)
             return
 
-        if preset_mode not in (self._attr_preset_modes or []):
+        if preset_mode not in (self.preset_modes or []):
             _LOGGER.warning(
                 "%s - native_preset_mode: preset %s not in underlying presets %s",
                 self, preset_mode, self._attr_preset_modes,
