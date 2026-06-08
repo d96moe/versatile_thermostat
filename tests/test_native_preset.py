@@ -186,6 +186,112 @@ async def test_native_preset_mode_temperature_unchanged_after_preset(
         assert entity.target_temperature == 22.0
 
 
+async def test_native_preset_mode_preset_mode_property_reflects_forward(
+    hass: HomeAssistant, skip_hass_states_is_state, skip_send_event
+):
+    """After async_set_preset_mode, VTherm's preset_mode property must immediately
+    return the new preset so the GUI reflects the change (forward direction)."""
+
+    await create_and_register_mock_climate(hass, "mock_climate", "MockClimateName", {})
+    hass.states.async_set(
+        "climate.mock_climate",
+        "off",
+        {"preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]},
+    )
+    await hass.async_block_till_done()
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="TheOverClimateMockName",
+        unique_id="uniqueId_native4",
+        data=NATIVE_PRESET_CLIMATE_CONFIG,
+    )
+    tz = get_tz(hass)
+    now = datetime.now(tz=tz)
+
+    with patch("custom_components.versatile_thermostat.const.NowClass.get_now", return_value=now):
+        entity = await create_thermostat(hass, entry, "climate.theoverclimatemockname")
+        await wait_for_local_condition(lambda: entity.is_ready is True)
+
+        assert entity.preset_mode is None or entity.preset_mode == "none"
+
+        with patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock):
+            await entity.async_set_preset_mode(PRESET_BOOST)
+            await hass.async_block_till_done()
+
+        # preset_mode property must reflect the new preset immediately (GUI forward direction)
+        assert entity.preset_mode == PRESET_BOOST
+
+
+async def test_native_preset_mode_underlying_change_mirrors_back(
+    hass: HomeAssistant, skip_hass_states_is_state, skip_send_event
+):
+    """When the underlying climate changes its own preset (e.g. via physical remote),
+    VTherm's preset_mode must update automatically (back direction)."""
+
+    await create_and_register_mock_climate(hass, "mock_climate", "MockClimateName", {})
+    hass.states.async_set(
+        "climate.mock_climate",
+        "heat",
+        {"preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST], "preset_mode": PRESET_ECO},
+    )
+    await hass.async_block_till_done()
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="TheOverClimateMockName",
+        unique_id="uniqueId_native5",
+        data=NATIVE_PRESET_CLIMATE_CONFIG,
+    )
+    tz = get_tz(hass)
+    now = datetime.now(tz=tz)
+
+    with patch("custom_components.versatile_thermostat.const.NowClass.get_now", return_value=now):
+        entity = await create_thermostat(hass, entry, "climate.theoverclimatemockname")
+        await wait_for_local_condition(lambda: entity.is_ready is True)
+
+        # Simulate underlying climate changing preset to BOOST (e.g. via physical remote)
+        hass.states.async_set(
+            "climate.mock_climate",
+            "heat",
+            {"preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST], "preset_mode": PRESET_BOOST},
+        )
+        await hass.async_block_till_done()
+
+        # VTherm must mirror the underlying's new preset
+        assert entity.preset_mode == PRESET_BOOST
+
+
+async def test_native_preset_mode_no_temp_number_entities(
+    hass: HomeAssistant, skip_hass_states_is_state, skip_send_event
+):
+    """When native_preset_mode=True, the preset temperature number entities
+    (Boost °C, Comfort °C, Eco °C, Frost °C) must NOT be created."""
+
+    await create_and_register_mock_climate(hass, "mock_climate", "MockClimateName", {})
+    hass.states.async_set("climate.mock_climate", "off", {"preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]})
+    await hass.async_block_till_done()
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="TheOverClimateMockName",
+        unique_id="uniqueId_native6",
+        data=NATIVE_PRESET_CLIMATE_CONFIG,
+    )
+    tz = get_tz(hass)
+    now = datetime.now(tz=tz)
+
+    with patch("custom_components.versatile_thermostat.const.NowClass.get_now", return_value=now):
+        await create_thermostat(hass, entry, "climate.theoverclimatemockname")
+        await hass.async_block_till_done()
+
+        # No preset temperature number entities should exist for this thermostat
+        for preset_suffix in ["_preset_eco_temp", "_preset_comfort_temp", "_preset_boost_temp", "_preset_frost_temp"]:
+            entity_id = f"number.theoverclimatemockname{preset_suffix}"
+            state = hass.states.get(entity_id)
+            assert state is None, f"Preset temp entity {entity_id} should not exist when native_preset_mode=True"
+
+
 async def test_normal_preset_mode_unaffected(
     hass: HomeAssistant, skip_hass_states_is_state, skip_send_event, fake_underlying_climate
 ):
