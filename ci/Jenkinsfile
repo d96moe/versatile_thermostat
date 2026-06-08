@@ -27,18 +27,9 @@ pipeline {
         stage('Test') {
             steps {
                 sh """
-                    python3 -m venv .venv
+                    python3.14 -m venv .venv
                     .venv/bin/pip install -q --upgrade pip
-                    # requirements_dev.txt pins homeassistant==2026.3.1 (needs Python >=3.14.2).
-                    # Jenkins agent has Python 3.13.x — install only the test runner directly.
-                    # pytest-homeassistant-custom-component brings its own compatible HA version.
-                    .venv/bin/pip install -q \
-                        pytest \
-                        pytest-asyncio \
-                        coverage \
-                        pytest-homeassistant-custom-component \
-                        aiodiscover \
-                        ulid_transform
+                    .venv/bin/pip install -q -r requirements_test.txt
                     .venv/bin/python -m pytest tests/ \
                         -p no:cacheprovider \
                         --tb=short \
