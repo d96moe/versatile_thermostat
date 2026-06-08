@@ -29,6 +29,11 @@ pipeline {
                 sh """
                     python3 -m venv .venv
                     .venv/bin/pip install -q --upgrade pip
+                    # requirements_dev.txt pins homeassistant==2026.3.1 which requires
+                    # Python >=3.14.2. Jenkins agent runs 3.13.x, so pin a compatible
+                    # version first and let pip install the rest with --ignore-requires-python
+                    # to override the pin from requirements_dev.txt.
+                    .venv/bin/pip install -q --ignore-requires-python "homeassistant==2026.2.3"
                     .venv/bin/pip install -q -r requirements_test.txt
                     .venv/bin/python -m pytest tests/ \
                         -p no:cacheprovider \
