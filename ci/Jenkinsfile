@@ -31,7 +31,9 @@ pipeline {
                     .venv/bin/pip install --upgrade pip
                     .venv/bin/pip install -r requirements_test.txt
                     .venv/bin/pip install pytest-socket
-                    .venv/bin/python -c "import vtherm_api; print('vtherm_api OK:', vtherm_api.__version__)"
+                    .venv/bin/pip show -f vtherm_api | head -30
+                    find .venv/lib -name "*.py" | grep vtherm | head -20 || true
+                    .venv/bin/python -c "import sys; print('sys.path:', sys.path[:5])"
                     .venv/bin/python -m pytest tests/ \
                         -p no:cacheprovider \
                         --tb=short \
