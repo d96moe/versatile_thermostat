@@ -55,11 +55,20 @@ async def test_native_preset_mode_exposes_underlying_presets(
     """When native_preset_mode=True, VTherm must expose the underlying climate's
     preset list instead of VT's own temperature-based presets."""
 
-    fake_underlying_climate = await create_and_register_mock_climate(
-        hass, "mock_climate", "MockClimateName", {}
+    await create_and_register_mock_climate(hass, "mock_climate", "MockClimateName", {})
+
+    # MockClimate doesn't declare PRESET_MODE in supported_features so HA's state
+    # machinery won't include preset_modes in the state attributes automatically.
+    # Set it manually — this is what a real heat pump would expose.
+    hass.states.async_set(
+        "climate.mock_climate",
+        "off",
+        {
+            "preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST],
+            "hvac_modes": ["off", "heat", "cool"],
+        },
     )
-    # MockClimate has [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]
-    assert fake_underlying_climate.preset_modes == [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]
+    await hass.async_block_till_done()
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -97,9 +106,13 @@ async def test_native_preset_mode_sets_underlying_preset(
     """When native_preset_mode=True, selecting a preset must call set_preset_mode
     on the underlying climate and must NOT change VTherm's target temperature."""
 
-    fake_underlying_climate = await create_and_register_mock_climate(
-        hass, "mock_climate", "MockClimateName", {}
+    await create_and_register_mock_climate(hass, "mock_climate", "MockClimateName", {})
+    hass.states.async_set(
+        "climate.mock_climate",
+        "off",
+        {"preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]},
     )
+    await hass.async_block_till_done()
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -119,9 +132,10 @@ async def test_native_preset_mode_sets_underlying_preset(
 
         initial_temp = entity.target_temperature
 
-        # Intercept the HA service call that forwards the preset to the underlying
-        with patch.object(
-            hass.services, "async_call", new_callable=AsyncMock
+        # ServiceRegistry.async_call is read-only on the instance in Python 3.14+.
+        # Patch at the class level instead.
+        with patch(
+            "homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock
         ) as mock_svc:
             await entity.async_set_preset_mode(PRESET_BOOST)
             await hass.async_block_till_done()
@@ -129,7 +143,7 @@ async def test_native_preset_mode_sets_underlying_preset(
             mock_svc.assert_called_once_with(
                 "climate",
                 "set_preset_mode",
-                {"entity_id": fake_underlying_climate.entity_id, "preset_mode": PRESET_BOOST},
+                {"entity_id": "climate.mock_climate", "preset_mode": PRESET_BOOST},
                 blocking=True,
             )
 
@@ -144,6 +158,8 @@ async def test_native_preset_mode_temperature_unchanged_after_preset(
     changes when native_preset_mode=True."""
 
     await create_and_register_mock_climate(hass, "mock_climate", "MockClimateName", {})
+    hass.states.async_set("climate.mock_climate", "off", {"preset_modes": [PRESET_COMFORT, PRESET_ECO, PRESET_BOOST]})
+    await hass.async_block_till_done()
 
     entry = MockConfigEntry(
         domain=DOMAIN,
