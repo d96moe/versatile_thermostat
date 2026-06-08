@@ -38,8 +38,7 @@ pipeline {
                         coverage \
                         pytest-homeassistant-custom-component \
                         aiodiscover \
-                        ulid_transform \
-                        "vtherm_api==0.13.316"
+                        ulid_transform
                     .venv/bin/python -m pytest tests/ \
                         -p no:cacheprovider \
                         --tb=short \
