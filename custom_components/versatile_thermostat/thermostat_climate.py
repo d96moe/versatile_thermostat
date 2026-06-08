@@ -838,6 +838,15 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
             self._attr_fan_mode = new_fan_mode
             changes = True
 
+        # In native_preset_mode: mirror the underlying climate's current preset back onto VTherm
+        # so the UI always reflects the pump's actual preset (e.g. changed via physical remote).
+        if self._native_preset_mode:
+            new_preset = new_state.attributes.get("preset_mode") if new_state.attributes else None
+            if new_preset and new_preset != self._attr_preset_mode:
+                _LOGGER.info("%s - native_preset_mode: underlying preset changed to %s, mirroring", self, new_preset)
+                self._attr_preset_mode = new_preset
+                changes = True
+
         # Manage new target temperature set if state if no other changes have been found
         # and if a target temperature have already been sent and if the VTherm is on
         if new_target_temp and self._follow_underlying_temp_change and not changes:

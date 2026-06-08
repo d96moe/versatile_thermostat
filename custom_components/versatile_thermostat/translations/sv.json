@@ -1,0 +1,26 @@
+{
+    "config": {
+        "step": {
+            "thermostat_climate": {
+                "data": {
+                    "native_preset_mode": "Använd underliggande klimatenhetens egna förinställningar"
+                },
+                "data_description": {
+                    "native_preset_mode": "När aktiverat exponerar VTherm den underliggande klimatenhetens egna förinställningar (t.ex. ECO, COMFORT, BOOST på en värmepump) istället för VTherms temperaturbaserade förinställningar. Att välja en förinställning skickar den direkt till enheten utan att ändra börvärdet. Passar värmepumpar och klimatenheter med meningsfulla inbyggda förinställningar."
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "thermostat_climate": {
+                "data": {
+                    "native_preset_mode": "Använd underliggande klimatenhetens egna förinställningar"
+                },
+                "data_description": {
+                    "native_preset_mode": "När aktiverat exponerar VTherm den underliggande klimatenhetens egna förinställningar (t.ex. ECO, COMFORT, BOOST på en värmepump) istället för VTherms temperaturbaserade förinställningar. Att välja en förinställning skickar den direkt till enheten utan att ändra börvärdet. Passar värmepumpar och klimatenheter med meningsfulla inbyggda förinställningar."
+                }
+            }
+        }
+    }
+}

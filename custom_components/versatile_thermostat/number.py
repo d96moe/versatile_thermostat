@@ -45,6 +45,7 @@ from .const import (
     CONF_USE_CENTRAL_BOILER_FEATURE,
     overrides,
     CONF_USE_MAIN_CENTRAL_CONFIG,
+    CONF_NATIVE_PRESET_MODE,
 )
 
 from .vtherm_preset import VThermPreset, VThermPresetWithAC, VThermPresetWithAway, VThermPresetWithACAway, PRESET_TEMP_SUFFIX, PRESET_AWAY_SUFFIX
@@ -86,7 +87,7 @@ async def async_setup_entry(
 
     if vt_type != CONF_THERMOSTAT_CENTRAL_CONFIG:
         # Creates non central temperature entities
-        if not entry.data.get(CONF_USE_PRESETS_CENTRAL_CONFIG, False):
+        if not entry.data.get(CONF_USE_PRESETS_CENTRAL_CONFIG, False) and not entry.data.get(CONF_NATIVE_PRESET_MODE, False):
             if entry.data.get(CONF_AC_MODE, False):
                 for preset in CONF_PRESETS_WITH_AC_VALUES:
                     _LOGGER.debug(
