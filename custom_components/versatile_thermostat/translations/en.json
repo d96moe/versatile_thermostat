@@ -111,6 +111,7 @@
                     "auto_regulation_use_device_temp": "Use internal temperature of the underlying",
                     "inverse_switch_command": "Inverse switch command",
                     "auto_fan_mode": "Auto fan mode",
+                    "native_preset_mode": "Use underlying climate's native presets",
                     "on_command_text": "Turn on command customization",
                     "vswitch_on_command": "Optional turn on commands",
                     "off_command_text": "Turn off command customization",
@@ -128,6 +129,7 @@
                     "auto_regulation_use_device_temp": "Use the eventual internal temperature sensor of the underlying to speedup the self-regulation (not needed in most cases)",
                     "inverse_switch_command": "For switch with pilot wire and diode you may need to inverse the command",
                     "auto_fan_mode": "Automatically activate fan when huge heating/cooling is necessary",
+                    "native_preset_mode": "When enabled, VTherm exposes and forwards the underlying climate's own preset modes (e.g. ECO, COMFORT, BOOST on a heat pump) instead of VTherm's temperature-based presets. Selecting a preset sends it directly to the underlying device without changing the target temperature. Ideal for heat pumps or AC units with meaningful built-in presets.",
                     "on_command_text": "For underlying of type `select` or `climate` you have to customize the commands."
                 }
             },
@@ -497,6 +499,7 @@
                     "auto_regulation_use_device_temp": "Use internal temperature of the underlying",
                     "inverse_switch_command": "Inverse switch command",
                     "auto_fan_mode": "Auto fan mode",
+                    "native_preset_mode": "Use underlying climate's native presets",
                     "on_command_text": "Turn on command customization",
                     "vswitch_on_command": "Optional turn on commands",
                     "off_command_text": "Turn off command customization",
@@ -514,6 +517,7 @@
                     "auto_regulation_use_device_temp": "Use the eventual internal temperature sensor of the underlying to speedup the self-regulation (not needed in most cases)",
                     "inverse_switch_command": "For switch with pilot wire and diode you may need to inverse the command",
                     "auto_fan_mode": "Automatically activate fan when huge heating/cooling is necessary",
+                    "native_preset_mode": "When enabled, VTherm exposes and forwards the underlying climate's own preset modes (e.g. ECO, COMFORT, BOOST on a heat pump) instead of VTherm's temperature-based presets. Selecting a preset sends it directly to the underlying device without changing the target temperature. Ideal for heat pumps or AC units with meaningful built-in presets.",
                     "on_command_text": "For underlying of type `select` or `climate` you have to customize the commands."
                 }
             },
