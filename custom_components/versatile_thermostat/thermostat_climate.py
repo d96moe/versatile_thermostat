@@ -843,7 +843,7 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
         # so the UI always reflects the pump's actual preset (e.g. changed via physical remote).
         if self._native_preset_mode:
             new_preset = new_state.attributes.get("preset_mode") if new_state.attributes else None
-            if new_preset and new_preset != self._attr_preset_mode:
+            if new_preset and new_preset != self._native_current_preset:
                 _LOGGER.info("%s - native_preset_mode: underlying preset changed to %s, mirroring", self, new_preset)
                 self._native_current_preset = new_preset
                 changes = True
