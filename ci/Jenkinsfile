@@ -28,7 +28,8 @@ pipeline {
             steps {
                 sh """
                     python3 -m venv .venv
-                    .venv/bin/pip install -q --use-feature=fast-deps -r requirements_test.txt
+                    .venv/bin/pip install -q --upgrade pip
+                    .venv/bin/pip install -q -r requirements_test.txt
                     .venv/bin/python -m pytest tests/ \
                         -p no:cacheprovider \
                         --tb=short \
