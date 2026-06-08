@@ -28,8 +28,9 @@ pipeline {
             steps {
                 sh """
                     /usr/local/bin/python3.14 -m venv .venv
-                    .venv/bin/pip install -q --upgrade pip
-                    .venv/bin/pip install -q -r requirements_test.txt
+                    .venv/bin/pip install --upgrade pip
+                    .venv/bin/pip install -r requirements_test.txt
+                    .venv/bin/pip list
                     .venv/bin/python -m pytest tests/ \
                         -p no:cacheprovider \
                         --tb=short \
