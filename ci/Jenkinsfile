@@ -30,7 +30,8 @@ pipeline {
                     /usr/local/bin/python3.14 -m venv .venv
                     .venv/bin/pip install --upgrade pip
                     .venv/bin/pip install -r requirements_test.txt
-                    .venv/bin/pip list
+                    .venv/bin/pip install pytest-socket
+                    .venv/bin/python -c "import vtherm_api; print('vtherm_api OK:', vtherm_api.__version__)"
                     .venv/bin/python -m pytest tests/ \
                         -p no:cacheprovider \
                         --tb=short \
