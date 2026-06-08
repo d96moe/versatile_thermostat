@@ -694,6 +694,14 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
 
     async def init_presets(self, central_config):
         """Init all presets of the VTherm"""
+        # In native_preset_mode the underlying climate's preset list is used instead of
+        # VTherm's temperature-based presets. Skip the entire preset build here — the list
+        # will be applied later in ThermostatOverClimate.init_underlyings_completed once
+        # the underlying entity is known.
+        if getattr(self, "_native_preset_mode", False):
+            _LOGGER.info("%s - native_preset_mode: skipping VTherm preset init", self)
+            return
+
         # If preset central config is used and central config is set,
         # take the presets from central config
         vtherm_api: VersatileThermostatAPI = VersatileThermostatAPI.get_vtherm_api()

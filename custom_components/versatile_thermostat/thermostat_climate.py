@@ -124,6 +124,13 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
             CONF_AUTO_REGULATION_USE_DEVICE_TEMP, False
         )
 
+        self._native_preset_mode: bool = config_entry.get(CONF_NATIVE_PRESET_MODE, False)
+
+    @property
+    def native_preset_mode(self) -> bool:
+        """True if VTherm defers preset management to the underlying climate's own presets."""
+        return self._native_preset_mode
+
     @property
     def is_over_climate(self) -> bool:
         """True if the Thermostat is over_climate"""
@@ -1141,6 +1148,57 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
         await super().init_underlyings_completed(under_entity_id)
 
         self.choose_auto_fan_mode(self._auto_fan_mode)
+
+        if self._native_preset_mode:
+            self._apply_native_preset_list()
+
+    def _apply_native_preset_list(self):
+        """Replace VTherm's temperature-based preset list with the underlying climate's
+        own preset list. Called once the underlying climate entity is known."""
+        under = self.underlying_entity(0)
+        if under is None:
+            return
+        state = self._hass.states.get(under.entity_id)
+        native_presets = (state.attributes.get("preset_modes") if state else None) or []
+        if not native_presets:
+            _LOGGER.warning("%s - native_preset_mode: underlying climate has no presets", self)
+            return
+        self._attr_preset_modes = list(native_presets)
+        self._vtherm_preset_modes = []  # VT temp-presets are not used
+        _LOGGER.info("%s - native_preset_mode: using underlying presets %s", self, self._attr_preset_modes)
+
+    @overrides
+    async def async_set_preset_mode(self, preset_mode: str):
+        """In native_preset_mode: forward the preset to the underlying climate and skip
+        VTherm's temperature machinery. Otherwise behave normally."""
+        if not self._native_preset_mode:
+            await super().async_set_preset_mode(preset_mode)
+            return
+
+        if preset_mode not in (self._attr_preset_modes or []):
+            _LOGGER.warning(
+                "%s - native_preset_mode: preset %s not in underlying presets %s",
+                self, preset_mode, self._attr_preset_modes,
+            )
+            return
+
+        _LOGGER.info("%s - native_preset_mode: forwarding preset %s to underlying climate", self, preset_mode)
+
+        # Forward to all underlying climates — do NOT touch VTherm's target temperature
+        for under in self._underlyings:
+            state = self._hass.states.get(under.entity_id)
+            if state is None:
+                continue
+            await self._hass.services.async_call(
+                "climate",
+                "set_preset_mode",
+                {"entity_id": under.entity_id, "preset_mode": preset_mode},
+                blocking=True,
+            )
+
+        # Update the reported preset_mode attribute so the UI reflects the change
+        self._attr_preset_mode = preset_mode
+        self.async_write_ha_state()
 
     @overrides
     def turn_aux_heat_on(self) -> None:

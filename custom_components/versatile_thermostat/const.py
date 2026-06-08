@@ -118,6 +118,7 @@ CONF_AUTO_REGULATION_PERIOD_MIN = "auto_regulation_periode_min"
 CONF_AUTO_REGULATION_USE_DEVICE_TEMP = "auto_regulation_use_device_temp"
 CONF_INVERSE_SWITCH = "inverse_switch_command"
 CONF_AUTO_FAN_MODE = "auto_fan_mode"
+CONF_NATIVE_PRESET_MODE = "native_preset_mode"
 CONF_AUTO_FAN_NONE = "auto_fan_none"
 CONF_AUTO_FAN_LOW = "auto_fan_low"
 CONF_AUTO_FAN_MEDIUM = "auto_fan_medium"
@@ -370,6 +371,7 @@ ALL_CONF = (
         CONF_AUTO_REGULATION_USE_DEVICE_TEMP,
         CONF_INVERSE_SWITCH,
         CONF_AUTO_FAN_MODE,
+        CONF_NATIVE_PRESET_MODE,
         CONF_USE_MAIN_CENTRAL_CONFIG,
         CONF_USE_TPI_CENTRAL_CONFIG,
         CONF_USE_PRESETS_CENTRAL_CONFIG,
