@@ -1,0 +1,43 @@
+// =============================================================================
+// Jenkinsfile.sync — Sync fork main with upstream jmcollin78/versatile_thermostat
+// Runs weekly (Monday 03:00). Just updates main — does NOT rebase feature branches.
+// Feature branches should be manually rebased when needed (typically before PR).
+// =============================================================================
+
+pipeline {
+    agent { label 'built-in' }
+
+    triggers {
+        cron('0 3 * * 1')  // Weekly Monday 03:00
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 10, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Sync upstream → fork main') {
+            steps {
+                sh """
+                    git clone https://github.com/d96moe/versatile_thermostat.git repo
+                    cd repo
+                    git remote add upstream https://github.com/jmcollin78/versatile_thermostat.git
+                    git fetch upstream
+                    git checkout main
+                    git merge --ff-only upstream/main
+                    git push origin main
+                    echo "=== Sync done: main is now at ==="
+                    git log -1 --oneline
+                """
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo 'Sync failed — upstream may have diverged from fork main (non-fast-forward). Manual intervention needed.'
+        }
+    }
+}
