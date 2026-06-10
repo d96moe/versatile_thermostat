@@ -1785,3 +1785,79 @@ async def test_auto_start_stop_disable_vtherm_off(
         )
 
     vtherm.remove_thermostat()
+
+
+async def test_auto_start_stop_is_auto_stop_detected_respects_enabled(
+    hass: HomeAssistant,
+):
+    """Regression test: is_auto_stop_detected must return False when auto-start/stop is
+    disabled, even if _is_auto_stop_detected is True internally (stale from a previous
+    enabled run or from the startup race where _is_auto_start_stop_enabled is briefly
+    True before the enable-switch entity restores its persisted state).
+
+    Without the fix, calculate_current_state in state_manager would see
+    is_auto_stop_detected=True and set hvac_mode=OFF even though the user had
+    disabled auto-start/stop — causing the underlying climate to be turned off
+    unexpectedly after HA restart (observed with over_climate + native_preset_mode).
+    """
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="TheOverClimateMockName",
+        unique_id="overClimateUniqueId2",
+        data={
+            CONF_NAME: "overClimate",
+            CONF_TEMP_SENSOR: "sensor.mock_temp_sensor",
+            CONF_THERMOSTAT_TYPE: CONF_THERMOSTAT_CLIMATE,
+            CONF_EXTERNAL_TEMP_SENSOR: "sensor.mock_ext_temp_sensor",
+            CONF_CYCLE_MIN: 5,
+            CONF_TEMP_MIN: 15,
+            CONF_TEMP_MAX: 30,
+            CONF_USE_WINDOW_FEATURE: False,
+            CONF_USE_MOTION_FEATURE: False,
+            CONF_USE_POWER_FEATURE: False,
+            CONF_USE_AUTO_START_STOP_FEATURE: True,
+            CONF_USE_PRESENCE_FEATURE: False,
+            CONF_UNDERLYING_LIST: ["climate.mock_climate2"],
+            CONF_MINIMAL_ACTIVATION_DELAY: 30,
+            CONF_MINIMAL_DEACTIVATION_DELAY: 0,
+            CONF_SAFETY_DELAY_MIN: 5,
+            CONF_SAFETY_MIN_ON_PERCENT: 0.3,
+            CONF_AUTO_FAN_MODE: CONF_AUTO_FAN_NONE,
+            CONF_AC_MODE: False,
+            CONF_AUTO_START_STOP_LEVEL: AUTO_START_STOP_LEVEL_FAST,
+        },
+    )
+
+    await create_and_register_mock_climate(
+        hass, "mock_climate2", "mock_climate2", {},
+        hvac_modes=["off", "cool", "heat"]
+    )
+
+    vtherm: ThermostatOverClimate = await create_thermostat(
+        hass, config_entry, "climate.overclimate2"
+    )
+    assert vtherm is not None
+
+    manager = vtherm.auto_start_stop_manager
+    assert manager is not None
+
+    # Simulate the startup race: _is_auto_start_stop_enabled was briefly True
+    # (from post_init) and the algorithm already set _is_auto_stop_detected=True,
+    # but the enable-switch has since restored to disabled (False).
+    manager._is_auto_stop_detected = True
+    manager._is_auto_start_stop_enabled = False
+
+    # is_auto_stop_detected must hide the stale internal flag when disabled
+    assert not manager.is_auto_stop_detected, (
+        "is_auto_stop_detected should be False when _is_auto_start_stop_enabled=False, "
+        "even if _is_auto_stop_detected=True internally"
+    )
+    assert not manager.is_detected
+
+    # With enabled=True the flag should be visible again
+    manager._is_auto_start_stop_enabled = True
+    assert manager.is_auto_stop_detected
+    assert manager.is_detected
+
+    vtherm.remove_thermostat()
