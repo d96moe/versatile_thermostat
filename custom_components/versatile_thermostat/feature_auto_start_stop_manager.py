@@ -69,13 +69,15 @@ class FeatureAutoStartStopManager(BaseFeatureManager):
             self._auto_start_stop_level = AUTO_START_STOP_LEVEL_NONE
             self._is_configured = False
 
-        # Initialize the enable flag synchronously so the manager is operational
-        # without having to wait for the AutoStartStopEnable switch's
-        # async_added_to_hass callback (which is racy under test load).
-        # The switch's async_added_to_hass will later override this value
-        # from the persisted state if needed.
-        # This must mirror the default in switch.AutoStartStopEnable.
-        self._is_auto_start_stop_enabled = self._auto_start_stop_level != AUTO_START_STOP_LEVEL_NONE
+        # Do NOT pre-initialize _is_auto_start_stop_enabled here.
+        # It starts as False (set in __init__) and the AutoStartStopEnable switch
+        # entity sets the correct value via set_auto_start_stop_enable() once it
+        # has restored its persisted state in async_added_to_hass.
+        # Pre-initializing to True caused a startup race: _is_auto_stop_detected
+        # could be True (restored from previous run) while the switch hadn't yet
+        # restored its persisted False, making is_auto_stop_detected return True
+        # and turning off the underlying climate unexpectedly.
+        self._is_auto_start_stop_enabled = False
 
         # Instanciate the auto start stop algo
         self._auto_start_stop_algo = AutoStartStopDetectionAlgorithm(
@@ -227,6 +229,15 @@ class FeatureAutoStartStopManager(BaseFeatureManager):
 
         # Restore the manager-level detected state
         self._is_auto_stop_detected = bool(manager_attr.get("is_auto_stop_detected", False))
+
+        # Restore the enabled state so is_auto_stop_detected is correct before the
+        # AutoStartStopEnable switch entity finishes async_added_to_hass.
+        # Without this, post_init leaves _is_auto_start_stop_enabled=False, so a
+        # correctly auto-stopped VTherm (enabled + detected) would briefly turn the
+        # underlying ON before the switch entity confirms the enabled state.
+        auto_start_stop_enable = manager_attr.get("auto_start_stop_enable")
+        if auto_start_stop_enable is not None:
+            self._is_auto_start_stop_enabled = bool(auto_start_stop_enable)
 
         # Restore algorithm intermediate state
         if self._auto_start_stop_algo is not None:
