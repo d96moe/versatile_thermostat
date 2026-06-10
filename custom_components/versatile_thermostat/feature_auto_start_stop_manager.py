@@ -295,13 +295,15 @@ class FeatureAutoStartStopManager(BaseFeatureManager):
 
     @property
     def is_auto_stop_detected(self) -> bool:
-        """Return True if the auto-start/stop feature is detected"""
-        return self._is_auto_stop_detected
+        """Return True if the auto-start/stop feature is detected.
+        Guards against startup race where _is_auto_stop_detected may be stale
+        from a previous enabled run while the enable-switch hasn't restored yet."""
+        return self._is_auto_stop_detected and self._is_auto_start_stop_enabled
 
     @property
     def is_detected(self) -> bool:
         """Return True if the auto-start/stop feature is detected"""
-        return self._is_auto_stop_detected
+        return self._is_auto_stop_detected and self._is_auto_start_stop_enabled
 
     @overrides
     @property
