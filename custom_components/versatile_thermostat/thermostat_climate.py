@@ -126,6 +126,9 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
 
         self._native_preset_mode: bool = config_entry.get(CONF_NATIVE_PRESET_MODE, False)
         self._native_current_preset: str | None = None  # tracks current preset in native_preset_mode
+        # Track the underlying's last known min/max so we only write HA state on real changes.
+        self._native_last_under_min: float | None = None
+        self._native_last_under_max: float | None = None
 
     @property
     def native_preset_mode(self) -> bool:
@@ -811,6 +814,7 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
             if new_preset and new_preset != self._native_current_preset:
                 _LOGGER.info("%s - native_preset_mode: underlying preset changed to %s, mirroring", self, new_preset)
                 self._native_current_preset = new_preset
+                self._apply_native_temp_range()
                 changes = True
 
         # Manage new target temperature set if state if no other changes have been found
@@ -1183,6 +1187,34 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
             return []
         return super().preset_modes
 
+    def _apply_native_temp_range(self) -> None:
+        """Mirror min_temp/max_temp from the underlying climate into VT's own range.
+
+        In native_preset_mode VT defers all preset and range control to the underlying
+        climate, so VT's slider should always reflect what the AC will actually accept.
+        Only writes state when the values genuinely change to avoid redundant HA updates.
+        """
+        under = self.underlying_entity(0) if self._underlyings else None
+        if not under:
+            return
+        state = self._hass.states.get(under.entity_id)
+        if not state or not state.attributes:
+            return
+        new_min = state.attributes.get("min_temp")
+        new_max = state.attributes.get("max_temp")
+        if new_min is None or new_max is None:
+            return
+        if new_min == self._native_last_under_min and new_max == self._native_last_under_max:
+            return
+        self._native_last_under_min = new_min
+        self._native_last_under_max = new_max
+        self._attr_min_temp = new_min
+        self._attr_max_temp = new_max
+        _LOGGER.debug(
+            "%s - native_preset_mode: temp range updated to [%.1f, %.1f]",
+            self, new_min, new_max,
+        )
+
     @overrides
     async def async_set_preset_mode(self, preset_mode: str):
         """In native_preset_mode: forward the preset to the underlying climate and skip
@@ -1212,8 +1244,9 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
                 blocking=True,
             )
 
-        # Update our own preset tracker so preset_mode property reflects the change
+        # Update our own preset tracker and adjust the visible setpoint range
         self._native_current_preset = preset_mode
+        self._apply_native_temp_range()
         self.async_write_ha_state()
 
     @overrides
