@@ -852,20 +852,6 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
                 self._apply_native_temp_range()
                 changes = True
 
-                # Issue: a preset switch on the underlying (e.g. heat_8_15 clamping its own
-                # setpoint to 15C) also changes new_target_temp in this same state event, but
-                # the temperature-follow block below is gated on `not changes` and this branch
-                # already set changes=True - so the underlying's new setpoint was mirroring the
-                # range but never the actual value, leaving VTherm's displayed setpoint stale
-                # until a manual change. Native preset mode means we fully trust the underlying,
-                # so sync unconditionally here rather than gating on follow_underlying_temp_change.
-                if new_target_temp is not None and new_target_temp != self.target_temperature:
-                    _LOGGER.info(
-                        "%s - native_preset_mode: preset change also changed underlying setpoint to %s, syncing",
-                        self, new_target_temp,
-                    )
-                    await self.async_set_temperature(temperature=new_target_temp)
-
         # Manage new target temperature set if state if no other changes have been found
         # and if a target temperature have already been sent and if the VTherm is on
         if new_target_temp and self._follow_underlying_temp_change and not changes:
