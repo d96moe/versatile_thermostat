@@ -1293,6 +1293,9 @@ async def test_bug_1947(hass: HomeAssistant, skip_hass_states_is_state):
     )
     assert vtherm is not None
 
+    # post_init leaves _is_auto_start_stop_enabled=False; simulate switch entity restoring state
+    await vtherm.auto_start_stop_manager.set_auto_start_stop_enable(True)
+
     tz = get_tz(hass)
     now: datetime = datetime.now(tz=tz)
     vtherm._set_now(now)
