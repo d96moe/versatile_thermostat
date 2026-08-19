@@ -24,18 +24,20 @@ pipeline {
     stages {
         stage('Sync upstream → fork native-preset-mode') {
             steps {
-                sh """
-                    rm -rf repo
-                    git clone https://github.com/d96moe/versatile_thermostat.git repo
-                    cd repo
-                    git remote add upstream https://github.com/jmcollin78/versatile_thermostat.git
-                    git fetch upstream
-                    git checkout native-preset-mode
-                    git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"
-                    git push origin native-preset-mode
-                    echo "=== Sync done: native-preset-mode is now at ==="
-                    git log -1 --oneline
-                """
+                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+                    sh '''
+                        rm -rf repo
+                        git clone https://github.com/d96moe/versatile_thermostat.git repo
+                        cd repo
+                        git remote add upstream https://github.com/jmcollin78/versatile_thermostat.git
+                        git fetch upstream
+                        git checkout native-preset-mode
+                        git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"
+                        git push https://x-access-token:${GH_TOKEN}@github.com/d96moe/versatile_thermostat.git native-preset-mode
+                        echo "=== Sync done: native-preset-mode is now at ==="
+                        git log -1 --oneline
+                    '''
+                }
             }
         }
     }
