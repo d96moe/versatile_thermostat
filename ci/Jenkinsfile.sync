@@ -6,6 +6,12 @@
 // A real merge, not a fast-forward: native-preset-mode always has unique patch
 // commits ahead of upstream/main, so --ff-only would fail on every run. If the
 // merge hits a conflict, it fails here and needs manual resolution.
+//
+// If the merge brought in new commits, also cuts a fork release: bumps the
+// patch version in manifest.json, tags it, and publishes a GitHub release with
+// the HACS zip asset. HACS picks up the new release on its own refresh cycle —
+// installing it in HA is a deliberate manual step (HACS update button), not
+// done here.
 // =============================================================================
 
 pipeline {
@@ -26,16 +32,61 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
                     sh '''
+                        set -e
                         rm -rf repo
                         git clone https://github.com/d96moe/versatile_thermostat.git repo
                         cd repo
+                        git config user.email "jenkins@d96moe.local"
+                        git config user.name "Jenkins CI"
                         git remote add upstream https://github.com/jmcollin78/versatile_thermostat.git
                         git fetch upstream
                         git checkout native-preset-mode
+                        BEFORE=$(git rev-parse HEAD)
                         git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"
+                        AFTER=$(git rev-parse HEAD)
                         git push https://x-access-token:${GH_TOKEN}@github.com/d96moe/versatile_thermostat.git native-preset-mode
                         echo "=== Sync done: native-preset-mode is now at ==="
                         git log -1 --oneline
+
+                        if [ "$BEFORE" = "$AFTER" ]; then
+                            echo "No new upstream commits — nothing to release."
+                            exit 0
+                        fi
+
+                        MANIFEST=custom_components/versatile_thermostat/manifest.json
+                        CURRENT_VERSION=$(grep -oP "\\"version\\":\\s*\\"\\K[^\\"]+" "$MANIFEST")
+                        MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+                        MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+                        PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+                        NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+                        echo "=== Cutting fork release v$NEW_VERSION (was $CURRENT_VERSION) ==="
+
+                        sed -i "s/\\"version\\": \\"$CURRENT_VERSION\\"/\\"version\\": \\"$NEW_VERSION\\"/" "$MANIFEST"
+                        git commit -am "Bump version to $NEW_VERSION for HACS release (native-preset-mode fork)"
+                        git push https://x-access-token:${GH_TOKEN}@github.com/d96moe/versatile_thermostat.git native-preset-mode
+                        git tag "v$NEW_VERSION"
+                        git push https://x-access-token:${GH_TOKEN}@github.com/d96moe/versatile_thermostat.git "v$NEW_VERSION"
+
+                        cd custom_components/versatile_thermostat
+                        rm -f versatile_thermostat.zip
+                        zip -rq versatile_thermostat.zip . -x "versatile_thermostat.zip"
+                        cd ../..
+
+                        RELEASE_JSON=$(curl -s -X POST \
+                            -H "Authorization: token ${GH_TOKEN}" \
+                            -H "Content-Type: application/json" \
+                            -d "{\\"tag_name\\":\\"v$NEW_VERSION\\",\\"target_commitish\\":\\"native-preset-mode\\",\\"name\\":\\"v$NEW_VERSION\\",\\"body\\":\\"Automated sync with upstream jmcollin78 + native_preset_mode fork patches.\\",\\"draft\\":false,\\"prerelease\\":false}" \
+                            "https://api.github.com/repos/d96moe/versatile_thermostat/releases")
+
+                        RELEASE_ID=$(echo "$RELEASE_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+
+                        curl -s -X POST \
+                            -H "Authorization: token ${GH_TOKEN}" \
+                            -H "Content-Type: application/zip" \
+                            --data-binary @custom_components/versatile_thermostat/versatile_thermostat.zip \
+                            "https://uploads.github.com/repos/d96moe/versatile_thermostat/releases/${RELEASE_ID}/assets?name=versatile_thermostat.zip" > /dev/null
+
+                        echo "=== Released v$NEW_VERSION — HACS will surface the update in HA on its next refresh ==="
                     '''
                 }
             }
@@ -44,7 +95,7 @@ pipeline {
 
     post {
         failure {
-            echo 'Sync failed — merge conflict between upstream and native-preset-mode. Manual intervention needed.'
+            echo 'Sync failed — merge conflict between upstream and native-preset-mode, or the release step errored. Manual intervention needed.'
         }
     }
 }
