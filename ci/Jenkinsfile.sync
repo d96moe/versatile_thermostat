@@ -1,7 +1,11 @@
 // =============================================================================
-// Jenkinsfile.sync — Sync fork main with upstream jmcollin78/versatile_thermostat
-// Runs weekly (Monday 03:00). Just updates main — does NOT rebase feature branches.
-// Feature branches should be manually rebased when needed (typically before PR).
+// Jenkinsfile.sync — Merge upstream jmcollin78/versatile_thermostat into
+// native-preset-mode (this fork's active branch, carries the native_preset_mode
+// patch on top of upstream's main). Runs weekly (Monday 03:00).
+//
+// A real merge, not a fast-forward: native-preset-mode always has unique patch
+// commits ahead of upstream/main, so --ff-only would fail on every run. If the
+// merge hits a conflict, it fails here and needs manual resolution.
 // =============================================================================
 
 pipeline {
@@ -18,17 +22,17 @@ pipeline {
     }
 
     stages {
-        stage('Sync upstream → fork main') {
+        stage('Sync upstream → fork native-preset-mode') {
             steps {
                 sh """
                     git clone https://github.com/d96moe/versatile_thermostat.git repo
                     cd repo
                     git remote add upstream https://github.com/jmcollin78/versatile_thermostat.git
                     git fetch upstream
-                    git checkout main
-                    git merge --ff-only upstream/main
-                    git push origin main
-                    echo "=== Sync done: main is now at ==="
+                    git checkout native-preset-mode
+                    git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"
+                    git push origin native-preset-mode
+                    echo "=== Sync done: native-preset-mode is now at ==="
                     git log -1 --oneline
                 """
             }
@@ -37,7 +41,7 @@ pipeline {
 
     post {
         failure {
-            echo 'Sync failed — upstream may have diverged from fork main (non-fast-forward). Manual intervention needed.'
+            echo 'Sync failed — merge conflict between upstream and native-preset-mode. Manual intervention needed.'
         }
     }
 }
