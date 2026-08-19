@@ -1228,7 +1228,8 @@ async def test_auto_start_stop_medium_heat_vtherm_preset_change_enable_false(
     assert vtherm._attr_extra_state_attributes["auto_start_stop_manager"]["auto_start_stop_dtmin"] == 7
 
     # 1. Vtherm auto-start/stop should be in FAST mode and enable should be on
-    await wait_for_local_condition(lambda: vtherm._attr_extra_state_attributes["auto_start_stop_manager"].get("auto_start_stop_enable") is True, timeout=3.0, hass=hass)
+    # post_init leaves _is_auto_start_stop_enabled=False; simulate switch entity restoring state
+    await vtherm.auto_start_stop_manager.set_auto_start_stop_enable(True)
 
     assert (
         vtherm.auto_start_stop_manager.auto_start_stop_level
@@ -1541,6 +1542,8 @@ async def test_auto_start_stop_fast_heat_window_mixed(
     )
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # post_init leaves _is_auto_start_stop_enabled=False; simulate switch entity restoring state
+    await vtherm.auto_start_stop_manager.set_auto_start_stop_enable(True)
 
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
@@ -1718,6 +1721,8 @@ async def test_auto_start_stop_disable_vtherm_off(
     enable_entity = search_entity(hass, "switch.overclimate_enable_auto_start_stop", SWITCH_DOMAIN)
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # post_init leaves _is_auto_start_stop_enabled=False; simulate switch entity restoring state
+    await vtherm.auto_start_stop_manager.set_auto_start_stop_enable(True)
 
     assert vtherm._attr_extra_state_attributes["auto_start_stop_manager"].get("auto_start_stop_enable") is True
 

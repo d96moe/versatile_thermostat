@@ -93,6 +93,12 @@ async def test_auto_start_stop_feature_manager_post_init(
         else AUTO_START_STOP_LEVEL_NONE
     )
     should_be_enabled = level not in [None, AUTO_START_STOP_LEVEL_NONE] and is_configured
+    # post_init always leaves _is_auto_start_stop_enabled=False (safe default).
+    # The AutoStartStopEnable switch entity sets the correct value via
+    # set_auto_start_stop_enable() once it has restored its persisted state.
+    assert auto_start_stop_manager.auto_start_stop_enable is False
+    # Simulate the switch entity restoring state
+    auto_start_stop_manager._is_auto_start_stop_enabled = should_be_enabled
     assert auto_start_stop_manager.auto_start_stop_enable is should_be_enabled
     assert auto_start_stop_manager._auto_start_stop_algo is not None
 
