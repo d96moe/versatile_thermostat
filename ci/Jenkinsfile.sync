@@ -25,6 +25,7 @@ pipeline {
         stage('Sync upstream → fork native-preset-mode') {
             steps {
                 sh """
+                    rm -rf repo
                     git clone https://github.com/d96moe/versatile_thermostat.git repo
                     cd repo
                     git remote add upstream https://github.com/jmcollin78/versatile_thermostat.git
