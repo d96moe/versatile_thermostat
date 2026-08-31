@@ -75,7 +75,7 @@ pipeline {
                         RELEASE_JSON=$(curl -s -X POST \
                             -H "Authorization: token ${GH_TOKEN}" \
                             -H "Content-Type: application/json" \
-                            -d "{\\"tag_name\\":\\"v$NEW_VERSION\\",\\"target_commitish\\":\\"native-preset-mode\\",\\"name\\":\\"v$NEW_VERSION\\",\\"body\\":\\"Automated sync with upstream jmcollin78 + native_preset_mode fork patches.\\",\\"draft\\":false,\\"prerelease\\":false}" \
+                            -d "{\\"tag_name\\":\\"v$NEW_VERSION\\",\\"target_commitish\\":\\"native-preset-mode\\",\\"name\\":\\"v$NEW_VERSION\\",\\"body\\":\\"Automated sync with upstream jmcollin78 + native_preset_mode fork patches. Upstream releases: https://github.com/jmcollin78/versatile_thermostat/releases\\",\\"draft\\":false,\\"prerelease\\":false}" \
                             "https://api.github.com/repos/d96moe/versatile_thermostat/releases")
 
                         RELEASE_ID=$(echo "$RELEASE_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
