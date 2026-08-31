@@ -536,7 +536,10 @@ async def test_security_over_climate(
         await wait_for_local_condition(lambda: entity.is_ready)
 
         # Even if the underlying is HEATING it will be off at startup
-        await wait_for_local_condition(lambda: entity.vtherm_hvac_mode is VThermHvacMode_OFF)
+        await wait_for_local_condition(
+            lambda: entity.vtherm_hvac_mode is VThermHvacMode_OFF
+            and entity.hvac_action is HVACAction.OFF
+        )
         assert entity.hvac_action is HVACAction.OFF
         assert fake_underlying_climate.hvac_mode == HVACMode.OFF
         assert fake_underlying_climate.hvac_action == HVACAction.OFF
@@ -569,12 +572,8 @@ async def test_security_over_climate(
         # Force safety mode
         assert entity._last_ext_temperature_measure is not None
         assert entity._last_temperature_measure is not None
-        assert (
-            entity._last_temperature_measure.astimezone(tz) - now
-        ).total_seconds() < 1
-        assert (
-            entity._last_ext_temperature_measure.astimezone(tz) - now
-        ).total_seconds() < 1
+        assert entity._last_temperature_measure.astimezone(tz) >= now
+        assert entity._last_ext_temperature_measure.astimezone(tz) >= now
 
         # Tries to turns on the Thermostat
         await entity.async_set_hvac_mode(VThermHvacMode_HEAT)

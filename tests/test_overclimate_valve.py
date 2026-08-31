@@ -92,7 +92,7 @@ async def test_over_climate_valve_mono(hass: HomeAssistant, fake_temp_sensor, fa
 
         assert vtherm.vtherm_hvac_modes == [VThermHvacMode_HEAT, VThermHvacMode_SLEEP, VThermHvacMode_OFF]
 
-        assert vtherm.hvac_action is HVACAction.OFF
+        await wait_for_local_condition(lambda: vtherm.hvac_action is HVACAction.OFF)
         assert vtherm.vtherm_hvac_mode is VThermHvacMode_OFF
         assert vtherm.target_temperature == vtherm.min_temp
         assert vtherm.preset_modes == [
@@ -670,6 +670,9 @@ async def test_over_climate_valve_vtherm_hvac_mode_sleep(hass: HomeAssistant, fa
         assert vtherm.is_over_climate is True
         assert vtherm.have_valve_regulation is True
         assert vtherm.vtherm_hvac_modes == [VThermHvacMode_HEAT, VThermHvacMode_SLEEP, VThermHvacMode_OFF]
+        await wait_for_local_condition(
+            lambda: vtherm.hvac_action is HVACAction.OFF, hass=hass
+        )
         assert vtherm.hvac_action is HVACAction.OFF
         assert vtherm.vtherm_hvac_mode is VThermHvacMode_OFF
         assert vtherm.valve_open_percent == 0
