@@ -5,6 +5,7 @@
 [![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
 
 # Versatile Thermostat
+Current FORK and branch reason: Using VT mainly for my 2 HVACS with over climate using external temperature sensors. VTs preset modes is only temperature-driven, and this is something I don't use. This FORK/Branch implements the native HVAC preset punch through, ie presets in VT is the HVAC presets.
 
 This README file is available in
 languages : [English](README.md) | [Français](README-fr.md) | [Deutsch](README-de.md) | [Čeština](README-cs.md) | [Polski](README-pl.md)
