@@ -407,6 +407,7 @@ async def test_sensors_over_climate(
             CONF_SAFETY_DELAY_MIN: 5,
             CONF_SAFETY_MIN_ON_PERCENT: 0.3,
             CONF_DEVICE_POWER: 1.5,
+            CONF_POWER_UNIT: POWER_UNIT_KILO_WATT,
             CONF_PRESET_POWER: 12,
         },
     )
@@ -419,6 +420,16 @@ async def test_sensors_over_climate(
         hass, "sensor.theoverclimatemockname_energy", "sensor"
     )
     assert energy_sensor
+
+    # Internal energy is expressed in Wh; a kW VTherm exposes it in kWh and
+    # persists it using the same unit as its configured power.
+    entity._total_energy = 13_000_000
+    await energy_sensor.async_my_climate_changed()
+    assert energy_sensor.native_value == 13_000
+    entity.update_custom_attributes()
+    assert entity.extra_state_attributes["specific_states"]["total_energy"] == 13_000
+    assert entity.extra_state_attributes["specific_states"]["total_energy_unit"] == UnitOfPower.KILO_WATT
+    entity._total_energy = 0
 
     last_temperature_sensor: LastTemperatureSensor = search_entity(
         hass, "sensor.theoverclimatemockname_last_temperature_date", "sensor"
