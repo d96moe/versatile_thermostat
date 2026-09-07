@@ -798,11 +798,16 @@ async def test_auto_start_stop_fast_ac_vtherm(
 
     assert vtherm._attr_extra_state_attributes["auto_start_stop_manager"]["auto_start_stop_dtmin"] == 7
 
-    # 1. Vtherm auto-start/stop should be in MEDIUM mode
+    # 1. Vtherm auto-start/stop should be in MEDIUM mode and an enable entity should exists
     assert (
         vtherm.auto_start_stop_manager.auto_start_stop_level
         == AUTO_START_STOP_LEVEL_FAST
     )
+    enable_entity = search_entity(
+        hass, "switch.overclimate_enable_auto_start_stop", SWITCH_DOMAIN
+    )
+    assert enable_entity is not None
+    assert enable_entity.state == STATE_ON
 
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
@@ -1865,6 +1870,14 @@ async def test_auto_start_stop_dry_stop_mode_uses_ac_preset_temp(hass: HomeAssis
 
     # Initialize all temps
     await set_all_climate_preset_temp(hass, vtherm, temps, "overclimate")
+
+    # Ensure the auto-start/stop enable switch has finished restoring its
+    # persisted state before we start driving the auto-stop logic
+    enable_entity = search_entity(
+        hass, "switch.overclimate_enable_auto_start_stop", SWITCH_DOMAIN
+    )
+    assert enable_entity is not None
+    assert enable_entity.state == STATE_ON
 
     # Use DRY as the auto-start/stop stop mode
     await vtherm.auto_start_stop_manager.set_auto_start_stop_stop_mode(AUTO_START_STOP_STOP_MODE_DRY)
