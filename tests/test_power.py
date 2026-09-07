@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import logging
 
 from homeassistant.components.number import SERVICE_SET_VALUE
+from homeassistant.const import UnitOfPower
 
 from custom_components.versatile_thermostat.thermostat_switch import ThermostatOverSwitch
 from custom_components.versatile_thermostat.thermostat_climate_valve import ThermostatOverClimateValve
@@ -142,6 +143,120 @@ async def test_power_feature_manager(
             assert power_consumption_max == 0
         else:
             assert power_consumption_max == 1234
+
+
+async def test_power_manager_custom_attributes_use_configured_units(
+    hass: HomeAssistant,
+):
+    """Diagnostic attributes must use the unit they advertise."""
+    fake_vtherm = MagicMock(spec=BaseThermostat)
+    type(fake_vtherm).name = PropertyMock(return_value="the name")
+    fake_vtherm.async_get_last_state = AsyncMock(return_value=None)
+    fake_vtherm.proportional_algorithm = None
+    fake_vtherm.is_over_climate = True
+    fake_vtherm.is_device_active = True
+
+    vtherm_api: VersatileThermostatAPI = VersatileThermostatAPI.get_vtherm_api(hass)
+    vtherm_api.find_central_configuration = MagicMock(return_value=object())
+    central_power_manager = vtherm_api.central_power_manager
+    central_power_manager.post_init(
+        {
+            CONF_POWER_SENSOR: "sensor.the_power_sensor",
+            CONF_MAX_POWER_SENSOR: "sensor.the_max_power_sensor",
+            CONF_USE_POWER_FEATURE: True,
+            CONF_PRESET_POWER: 13,
+            CONF_POWER_UNIT: POWER_UNIT_KILO_WATT,
+        }
+    )
+    central_power_manager._current_power = 1500.0
+    central_power_manager._current_max_power = 3000.0
+
+    power_manager = FeaturePowerManager(fake_vtherm, hass)
+    power_manager.post_init(
+        {
+            CONF_USE_POWER_FEATURE: True,
+            CONF_PRESET_POWER: 10,
+            CONF_DEVICE_POWER: 2.0,
+            CONF_POWER_UNIT: POWER_UNIT_KILO_WATT,
+        }
+    )
+    await power_manager.start_listening()
+
+    custom_attributes = {}
+    power_manager.add_custom_attributes(custom_attributes)
+    attributes = custom_attributes["power_manager"]
+
+    assert attributes["device_power"] == 2.0
+    assert attributes["mean_cycle_power"] == 2.0
+    assert attributes["power_unit"] == UnitOfPower.KILO_WATT
+    assert attributes["current_power"] == 1.5
+    assert attributes["current_max_power"] == 3.0
+    assert attributes["central_power_unit"] == UnitOfPower.KILO_WATT
+
+
+async def test_power_manager_checks_available_power_with_kilowatt_device(
+    hass: HomeAssistant,
+):
+    """Availability checks use the Watts-normalized device power of a kW VTherm."""
+    fake_vtherm = MagicMock(spec=BaseThermostat)
+    fake_vtherm.entity_id = "climate.kilowatt_vtherm"
+    type(fake_vtherm).name = PropertyMock(return_value="kilowatt vtherm")
+    type(fake_vtherm).is_device_active = PropertyMock(return_value=False)
+    type(fake_vtherm).is_over_climate = PropertyMock(return_value=False)
+    type(fake_vtherm).nb_underlying_entities = PropertyMock(return_value=1)
+    fake_vtherm.async_get_last_state = AsyncMock(return_value=None)
+
+    vtherm_api: VersatileThermostatAPI = VersatileThermostatAPI.get_vtherm_api(hass)
+    vtherm_api.find_central_configuration = MagicMock(return_value=object())
+    central_power_manager = vtherm_api.central_power_manager
+    central_power_manager.post_init(
+        {
+            CONF_POWER_SENSOR: "sensor.the_power_sensor",
+            CONF_MAX_POWER_SENSOR: "sensor.the_max_power_sensor",
+            CONF_USE_POWER_FEATURE: True,
+            CONF_PRESET_POWER: 13,
+            CONF_POWER_UNIT: POWER_UNIT_WATT,
+        }
+    )
+    central_power_manager._current_power = 2000.0
+    central_power_manager._current_max_power = 3500.0
+
+    power_manager = FeaturePowerManager(fake_vtherm, hass)
+    power_manager.post_init(
+        {
+            CONF_USE_POWER_FEATURE: True,
+            CONF_PRESET_POWER: 10,
+            CONF_DEVICE_POWER: 2.0,
+            CONF_POWER_UNIT: POWER_UNIT_KILO_WATT,
+        }
+    )
+    await power_manager.start_listening()
+
+    available, startup_power = await power_manager.check_power_available()
+
+    assert power_manager.device_power == 2000.0
+    assert startup_power == 2000.0
+    assert available is False
+
+
+@pytest.mark.parametrize("persisted_unit", [POWER_UNIT_MEGA_WATT, POWER_UNIT_AUTO])
+async def test_power_manager_falls_back_to_watt_for_an_invalid_persisted_unit(
+    hass: HomeAssistant,
+    persisted_unit,
+) -> None:
+    """Only W and kW are accepted for a VTherm persisted power unit."""
+    power_manager = FeaturePowerManager(MagicMock(), hass)
+
+    power_manager.post_init(
+        {
+            CONF_USE_POWER_FEATURE: True,
+            CONF_DEVICE_POWER: 2.0,
+            CONF_POWER_UNIT: persisted_unit,
+        }
+    )
+
+    assert power_manager.power_unit == UnitOfPower.WATT
+    assert power_manager.device_power == 2.0
 
 
 async def test_power_feature_manager_reserves_startup_power_per_underlying_for_multi_underlyings(
@@ -365,6 +480,7 @@ async def test_power_management_hvac_off(hass: HomeAssistant, skip_hass_states_i
             CONF_SAFETY_DELAY_MIN: 5,
             CONF_SAFETY_MIN_ON_PERCENT: 0.3,
             CONF_DEVICE_POWER: 100,
+            CONF_POWER_UNIT: POWER_UNIT_WATT,
             CONF_PRESET_POWER: 12,
         },
     )
@@ -403,7 +519,7 @@ async def test_power_management_hvac_off(hass: HomeAssistant, skip_hass_states_i
 
         # All configuration is not complete
         assert entity.preset_mode == VThermPreset.BOOST
-        assert entity.power_manager.overpowering_state is STATE_UNKNOWN # due to hvac_off
+        assert entity.power_manager.overpowering_state is STATE_OFF # because power and max_power are set due to patch and side effects above.
 
         # Send power max mesurement
         now = now + timedelta(seconds=30)
@@ -412,7 +528,7 @@ async def test_power_management_hvac_off(hass: HomeAssistant, skip_hass_states_i
         assert entity.power_manager.is_overpowering_detected is False
         # All configuration is complete and power is < power_max
         assert entity.preset_mode == VThermPreset.BOOST
-        assert entity.power_manager.overpowering_state is STATE_UNKNOWN # # due to hvac_off
+        assert entity.power_manager.overpowering_state is STATE_OFF # because power and max_power are set due to patch and side effects above.
 
     # Send power max mesurement too low but VThermHvacMode is off
     side_effects.add_or_update_side_effect("sensor.the_max_power_sensor", State("sensor.the_max_power_sensor", 149))
@@ -429,7 +545,7 @@ async def test_power_management_hvac_off(hass: HomeAssistant, skip_hass_states_i
         assert entity.power_manager.is_overpowering_detected is False
         # All configuration is complete and power is > power_max but we stay in Boost cause thermostat if Off
         assert entity.preset_mode == VThermPreset.BOOST
-        assert entity.power_manager.overpowering_state is STATE_UNKNOWN
+        assert entity.power_manager.overpowering_state is STATE_OFF
 
         assert mock_send_event.call_count == 0
         assert mock_heater_on.call_count == 0
@@ -472,6 +588,7 @@ async def test_power_management_hvac_on(hass: HomeAssistant, skip_hass_states_is
             CONF_SAFETY_DELAY_MIN: 5,
             CONF_SAFETY_MIN_ON_PERCENT: 0.3,
             CONF_DEVICE_POWER: 100,
+            CONF_POWER_UNIT: POWER_UNIT_WATT,
             CONF_PRESET_POWER: 12,
         },
     )
@@ -644,6 +761,7 @@ async def test_power_management_energy_over_switch(hass: HomeAssistant, skip_has
             CONF_SAFETY_DELAY_MIN: 5,
             CONF_SAFETY_MIN_ON_PERCENT: 0.3,
             CONF_DEVICE_POWER: 100,
+            CONF_POWER_UNIT: POWER_UNIT_WATT,
             CONF_PRESET_POWER: 12,
         },
     )
@@ -787,6 +905,7 @@ async def test_power_management_energy_over_climate(
             CONF_SAFETY_DELAY_MIN: 5,
             CONF_SAFETY_MIN_ON_PERCENT: 0.3,
             CONF_DEVICE_POWER: 100,
+            CONF_POWER_UNIT: POWER_UNIT_WATT,
             CONF_PRESET_POWER: 12,
         },
     )
@@ -1091,7 +1210,7 @@ async def test_power_management_over_climate_valve(
     assert vtherm.hvac_action is HVACAction.HEATING
     assert vtherm.vtherm_hvac_mode is VThermHvacMode_HEAT
     assert vtherm.total_energy == 0.0
-    assert vtherm.power_manager.mean_cycle_power == 1 * 0.4  # device_power * on_percent
+    assert vtherm.power_manager.mean_cycle_power == 1000 * 0.4  # device_power(W) * on_percent
 
     await wait_for_local_condition(lambda: fake_underlying_climate.hvac_mode == HVACMode.HEAT, 5)
     await wait_for_local_condition(lambda: fake_underlying_climate.hvac_action == HVACAction.HEATING, 10)
@@ -1102,8 +1221,8 @@ async def test_power_management_over_climate_valve(
     vtherm._set_now(now)
 
     await vtherm.async_control_heating()
-    assert vtherm.total_energy == 0.03 # 5 minutes (1/12 hour) at 0.4 power -> 0.4/12=0.0333 rounded to 0.03
-    assert vtherm.power_manager.mean_cycle_power == 1 * 0.4  # device_power * on_percent
+    assert vtherm.total_energy == 33.33  # 5 minutes (1/12 hour) at 0.4 power -> 0.4/12=0.0333 rounded to 0.03 in Wh
+    assert vtherm.power_manager.mean_cycle_power == 1000 * 0.4  # device_power * on_percent
 
     # 4. limit the power by changing the room temperature closer to target
     now = now + timedelta(minutes=2)
@@ -1114,8 +1233,8 @@ async def test_power_management_over_climate_valve(
 
     # Simulate a cycle
     await vtherm.async_control_heating()
-    assert vtherm.total_energy == 0.03 + 0.02  # 2 minutes (1/30 hour) at 0.25 power -> 0.25/30=0.0083 rounded to 0.01
-    assert vtherm.power_manager.mean_cycle_power == 1 * 0.25  # device_power * on_percent
+    assert vtherm.total_energy == 33.33 + 13.34  # 2 minutes (1/30 hour) at 0.25 power -> 0.25/30=0.0083 rounded to 0.01 in Wh
+    assert vtherm.power_manager.mean_cycle_power == 1000 * 0.25  # device_power * on_percent
 
     # 5. Turn off the VTherm after 3 minutes of heating
     now = now + timedelta(minutes=3)
@@ -1135,7 +1254,7 @@ async def test_power_management_over_climate_valve(
 
     await wait_for_local_condition(lambda: vtherm.proportional_algorithm.on_percent == 0.0)
 
-    assert vtherm.total_energy == 0.06 # 0.03 + 0.02 + 0.01
+    assert vtherm.total_energy == 59.17  # 0.03 + 0.02 + 0.01 in Wh
     assert vtherm.power_manager.mean_cycle_power == 0.0
     assert vtherm.valve_open_percent == 0
 
