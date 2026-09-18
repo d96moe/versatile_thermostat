@@ -28,4 +28,29 @@ Dann klicken Sie auf die Option „Zugehörige Entities“ aus dem Menü, dann s
 
 Der derzeit verfügbare Algorithmus ist TPI. Siehe [Algorithmus](#algorithm).
 
+### Steuerung der Ventilöffnung
+
+`over_valve` kann den TPI-Öffnungsbefehl an die physikalischen Grenzen jeder
+Ventil-Entität anpassen. Der `opening_threshold_degree` wird anhand des rohen
+TPI-Prozentsatzes ausgewertet. Liegt dieser darunter, lautet der Sollwert
+`100 - max_closing_degree`. Danach wird der Mindestöffnungsgrad angewendet und
+anschließend der Höchstöffnungsgrad. `opening_threshold_degree` und
+`max_closing_degree` gelten für den gesamten Thermostat. Mit den Standardwerten
+bleibt der gesendete Befehl identisch zum TPI-Rohwert.
+
+`min_opening_degrees` und `max_opening_degrees` sind durch Kommata getrennte
+Listen in der Reihenfolge der untergeordneten Ventile. Unvollständige Listen
+sind zulässig: fehlende Werte verwenden die Standardwerte. Listen mit mehr
+Werten als konfigurierte Ventile werden abgelehnt.
+
 Es ist möglich, einen `Thermostat_over_valve` zur Steuerung einer Klimaanlage zu wählen, indem man das Kästchen "AC Mode" aktiviert. In diesem Fall wird nur der Kühlmodus angezeigt.
+
+### Ruhemodus
+
+`over_valve` unterstützt den Ruhemodus. Die Auswahl von `sleep` oder der Aufruf
+der Aktion `versatile_thermostat.set_hvac_mode_sleep` zeigt VTherm als
+ausgeschaltet an und sendet gleichzeitig eine rohe Öffnungsanforderung von 100 %
+an jedes untergeordnete Ventil. Die normale Umrechnung der Öffnungssteuerung
+bleibt erhalten: `max_opening_degrees` und die Grenzen der `number`-Entity
+können die physische Öffnung begrenzen. Der Ruhemodus fordert keine zentrale
+Kesselheizung an; das Attribut `is_sleeping` kennzeichnet diesen Zustand.

@@ -29,5 +29,38 @@ Ensuite cliquez sur l'option de menu "Sous-jacents" et vous allez avoir cette pa
 
 L'algorithme à utiliser est aujourd'hui limité à TPI est disponible. Voir [algorithme](#algorithme).
 
+### Contrôle de l'ouverture de la vanne
+
+`over_valve` peut adapter la commande d'ouverture TPI aux contraintes physiques
+de chaque vanne. La configuration utilise les mêmes paramètres que le contrôle
+direct de vanne avec `over_climate` :
+
+1. `opening_threshold_degree` : sous ce pourcentage TPI brut, la vanne est
+	considérée comme fermée.
+2. `max_closing_degree` : pourcentage de fermeture maximal. Sous le seuil, la
+	commande est `100 - max_closing_degree` ; conserver la valeur `100` ferme
+	complètement la vanne.
+3. `min_opening_degrees` : valeurs minimales d'ouverture séparées par des
+	virgules, une par vanne sous-jacente. La valeur est appliquée dès que le
+	seuil est atteint.
+4. `max_opening_degrees` : valeurs maximales d'ouverture séparées par des
+	virgules, une par vanne sous-jacente. Les valeurs absentes utilisent le
+	maximum supporté par l'entité `number` concernée.
+
+Pour plusieurs vannes, les valeurs suivent l'ordre des entités sous-jacentes.
+Les listes courtes utilisent les valeurs par défaut pour les vannes restantes ;
+les listes plus longues sont refusées. Avec les valeurs par défaut (`0`, listes
+vides, `100`), la commande envoyée reste identique au pourcentage TPI brut.
+
 Il est possible de choisir un thermostat `over-valve` qui commande une climatisation en cochant la case "AC Mode". Dans ce cas, seul le mode refroidissement sera visible.
+
+### Mode sommeil
+
+`over_valve` prend en charge le mode sommeil. La sélection de `sleep`, ou
+l'appel de l'action `versatile_thermostat.set_hvac_mode_sleep`, présente le
+VTherm comme arrêté tout en envoyant une demande brute d'ouverture à 100 % à
+chaque vanne sous-jacente. Cette demande conserve la conversion normale de
+contrôle d'ouverture : `max_opening_degrees` et les bornes de l'entité `number`
+peuvent donc plafonner l'ouverture physique. Le sommeil ne sollicite pas la
+chaudière centrale ; l'attribut `is_sleeping` identifie cet état.
 

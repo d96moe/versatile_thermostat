@@ -451,6 +451,7 @@ async def test_user_config_flow_over_climate(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
     ]
     assert result.get("errors") is None
@@ -523,6 +524,7 @@ async def test_user_config_flow_over_climate(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize",  # because we need Advanced default parameters
     ]
@@ -571,6 +573,7 @@ async def test_user_config_flow_over_climate(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize", finalize is not present waiting for advanced configuration
     ]
@@ -609,6 +612,7 @@ async def test_user_config_flow_over_climate(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "finalize",  # Now finalize is present
     ]
 
@@ -683,6 +687,7 @@ async def test_user_config_flow_over_climate_auto_start_stop(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
     ]
     assert result.get("errors") is None
@@ -716,6 +721,7 @@ async def test_user_config_flow_over_climate_auto_start_stop(
         "auto_start_stop",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize", finalize is not present waiting for advanced configuration
     ]
@@ -806,6 +812,7 @@ async def test_user_config_flow_over_climate_auto_start_stop(
         "auto_start_stop",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize",  # because we need Advanced default parameters
     ]
@@ -860,6 +867,7 @@ async def test_user_config_flow_over_climate_auto_start_stop(
         "auto_start_stop",
         "advanced",
         "lock",
+        "humidity",
         "finalize",  # Now finalize is present
     ]
 
@@ -937,6 +945,7 @@ async def test_user_config_flow_over_switch_bug_552_tpi(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
     ]
     assert result.get("errors") is None
@@ -988,6 +997,7 @@ async def test_user_config_flow_over_switch_bug_552_tpi(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",  # tpi and presets are not configured and there is no central configuration
     ]
 
@@ -1022,6 +1032,7 @@ async def test_user_config_flow_over_switch_bug_552_tpi(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",  # advanced, tpi and presets are not configured and there is no central configuration
     ]
 
@@ -1064,6 +1075,7 @@ async def test_user_config_flow_over_switch_bug_552_tpi(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",  # tpi is not configured and there is no central configuration
     ]
 
@@ -1114,6 +1126,7 @@ async def test_user_config_flow_over_switch_bug_552_tpi(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "finalize",  # all is now configured
     ]
 
@@ -1199,6 +1212,7 @@ async def test_user_config_flow_over_climate_valve(
         "presets",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
     ]
     assert result.get("errors") is None
@@ -1275,6 +1289,7 @@ async def test_user_config_flow_over_climate_valve(
         "sync_device_internal_temp",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize",  # because we need Advanced default parameters
     ]
@@ -1364,6 +1379,7 @@ async def test_user_config_flow_over_climate_valve(
         "sync_device_internal_temp",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize", finalize is not present waiting for advanced configuration
     ]
@@ -1383,7 +1399,7 @@ async def test_user_config_flow_over_climate_valve(
             # CONF_OFFSET_CALIBRATION_LIST: ["number.offset_calibration1"],
             CONF_OPENING_DEGREE_LIST: ["number.opening_degree1"],
             CONF_CLOSING_DEGREE_LIST: ["number.closing_degree1"],
-            CONF_MIN_OPENING_DEGREES: "10, 20,0",
+            CONF_MIN_OPENING_DEGREES: "10, 20",
             CONF_MAX_CLOSING_DEGREE: "30",
             CONF_MAX_OPENING_DEGREES: "90",
             CONF_OPENING_THRESHOLD_DEGREE: "5",
@@ -1470,7 +1486,7 @@ async def test_user_config_flow_over_climate_valve(
                 "number.opening_degree2",
             ],
             CONF_CLOSING_DEGREE_LIST: [],
-            CONF_MIN_OPENING_DEGREES: "10, 20,0",
+            CONF_MIN_OPENING_DEGREES: "10, 20",
             CONF_MAX_CLOSING_DEGREE: "30",
             CONF_MAX_OPENING_DEGREES: "90",
             CONF_OPENING_THRESHOLD_DEGREE: "5",
@@ -1489,6 +1505,7 @@ async def test_user_config_flow_over_climate_valve(
         "sync_device_internal_temp",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize", finalize is not present waiting for advanced configuration
     ]
@@ -1530,6 +1547,7 @@ async def test_user_config_flow_over_climate_valve(
         "sync_device_internal_temp",
         "advanced",
         "lock",
+        "humidity",
         "configuration_not_complete",
         # "finalize",  finalize is not present awaiting for sync_device_internal_temp configuration
     ]
@@ -1590,6 +1608,7 @@ async def test_user_config_flow_over_climate_valve(
         "sync_device_internal_temp",
         "advanced",
         "lock",
+        "humidity",
         "finalize",  # This time finalize is present
     ]
 
@@ -1639,7 +1658,7 @@ async def test_user_config_flow_over_climate_valve(
         CONF_PROP_FUNCTION: PROPORTIONAL_FUNCTION_TPI,
         CONF_TPI_COEF_INT: 0.3,
         CONF_TPI_COEF_EXT: 0.1,
-        CONF_MIN_OPENING_DEGREES: "10, 20,0",
+        CONF_MIN_OPENING_DEGREES: "10, 20",
         CONF_MAX_CLOSING_DEGREE: 30,
         CONF_MAX_OPENING_DEGREES: "90",
         CONF_OPENING_THRESHOLD_DEGREE: 5,
