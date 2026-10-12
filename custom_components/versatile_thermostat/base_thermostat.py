@@ -907,9 +907,16 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
         # transform _attr_preset_modes into _vtherm_preset_modes
         self._vtherm_preset_modes = [VThermPreset(mode) for mode in self._attr_preset_modes]
 
-        # Re-applicate the last preset if any to take change into account
-        if self._state_manager.current_state.preset and self._state_manager.current_state.preset != VThermPreset.NONE:
-            await self.async_set_preset_mode_internal(self._state_manager.current_state.preset)
+        # Re-apply the requested visible preset, if it is still configured.
+        # The current preset can be a temporary hidden override (safety/power)
+        # and must never become the requested user preset during initialization.
+        requested_preset = self._state_manager.requested_state.preset
+        if (
+            requested_preset != VThermPreset.NONE
+            and requested_preset in self._vtherm_preset_modes
+            and requested_preset not in HIDDEN_PRESETS
+        ):
+            await self.async_set_preset_mode_internal(requested_preset)
 
     ##
     ## Properties overriden from ClimateEntity (or not)
@@ -2031,6 +2038,14 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
                 if not under.is_initialized:
                     not_initialized_entities.extend(under.state_manager.get_uninitialized_entities())
 
+        # Find all underlying entities that became unavailable/unknown after the initialization
+        unavailable_underlying_entities: list[str] = []
+        if self.is_initialized:
+            for under in self._underlyings:
+                unavailable_underlying_entities.extend(under.state_manager.get_uninitialized_entities())
+            if unavailable_underlying_entities:
+                messages.append(MSG_UNDERLYING_UNAVAILABLE)
+
         self._attr_extra_state_attributes: dict[str, Any] = {
             "hvac_action": self.hvac_action,
             "hvac_mode": self.hvac_mode,
@@ -2066,6 +2081,7 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
                 "is_locked": self.lock_manager.is_locked,
                 "is_recalculate_scheduled": self.is_recalculate_scheduled,
                 "not_initialized_entities": not_initialized_entities,
+                "unavailable_underlying_entities": unavailable_underlying_entities,
                 "messages": messages,
             },
             "configuration": {
@@ -2299,9 +2315,9 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
 
     async def service_set_safety(
         self,
-        delay_min: int,
-        min_on_percent: float,
-        default_on_percent: float,
+        delay_min: int | None = None,
+        min_on_percent: float | None = None,
+        default_on_percent: float | None = None,
     ):
         """Called by a service call:
         service: versatile_thermostat.set_safety
@@ -2315,13 +2331,17 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
         if self.lock_manager.check_is_locked("service_set_safety"):
             return
         write_event_log(
-            _LOGGER, self, f"Calling SERVICE_SET_SAFETY, delay_min: {delay_min}, " f"min_on_percent: {min_on_percent * 100} %, default_on_percent: {default_on_percent * 100} %"
+            _LOGGER,
+            self,
+            f"Calling SERVICE_SET_SAFETY, delay_min: {delay_min}, "
+            f"min_on_percent: {min_on_percent * 100 if min_on_percent is not None else 'unchanged'} %, "
+            f"default_on_percent: {default_on_percent * 100 if default_on_percent is not None else 'unchanged'} %",
         )
-        if delay_min:
+        if delay_min is not None:
             self._safety_manager.set_safety_delay_min(delay_min)
-        if min_on_percent:
+        if min_on_percent is not None:
             self._safety_manager.set_safety_min_on_percent(min_on_percent)
-        if default_on_percent:
+        if default_on_percent is not None:
             self._safety_manager.set_safety_default_on_percent(default_on_percent)
 
         await self.async_control_heating()

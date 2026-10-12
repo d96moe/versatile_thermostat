@@ -442,6 +442,7 @@ The custom attributes are as follows:
 | ``total_energy``                                | An estimate of the total energy consumed by this VTherm                                                                                                                                                         |
 | ``last_change_time_from_vtherm``                | The date/time of the last change made by VTherm                                                                                                                                                                 |
 | ``messages``                                    | A list of messages explaining the current state calculation. See [state messages](#state-messages)                                                                                                              |
+| ``unavailable_underlying_entities``             | The list of underlying entities (climate, switch, valve, opening/closing degree numbers...) that are `unavailable` or `unknown` after the VTherm startup. Empty when all are available                         |
 | ``is_sleeping``                                 | Indicates the VTherm is in sleep mode (valid for `over_climate` with direct valve control and `over_valve`)                                                                                                     |
 | ``is_recalculate_scheduled``                    | Indicates that the recalculation of the underlying state has been delayed by time filtering to limit the number of interactions with the controlled equipment                                                   |
 | **SECTION `configuration`**                     | ------                                                                                                                                                                                                          |
@@ -653,5 +654,22 @@ The `specific_states.messages` custom attribute contains a list of message codes
 | `target_temp_activity_detected`     | The target temperature was forced by motion detection                               |
 | `target_temp_activity_not_detected` | The target temperature was forced by no motion detection                            |
 | `target_temp_absence_detected`      | The target temperature was forced by absence detection                              |
+| `underlying_unavailable`            | At least one underlying entity is unavailable or unknown (see `unavailable_underlying_entities`) |
 
 Note: these messages are available in the [VTherm UI Card](documentation/en/additions.md#versatile-thermostat-ui-card) under the information icon.
+
+## `hvac_action` with direct valve control
+
+For an `over_climate` VTherm with direct valve control, `hvac_action` is calculated from the actual valve opening and the last opening command. It does not rely on the action reported by the underlying climate entity.
+
+| VTherm condition         | Valve condition                                                                                     | Resulting `hvac_action` | Notes                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| Internal mode is `SLEEP` | Any physical opening, including 100%                                                                | `off`                   | Forced state: the valve can remain open without a heating or central-boiler request. |
+| Not `SLEEP`              | At least one regulated valve has an actual opening strictly greater than `100 - max_closing_degree` | `heating`               | The comparison is strict.                                                            |
+| Not `SLEEP`              | No valve is heating, but at least one valve has a positive last opening command                     | `idle`                  | The valve is commanded open but is not considered physically active.                 |
+| Not `SLEEP`              | All valves have a last opening command of `0`                                                       | `off`                   | No opening is pending.                                                               |
+| Not `SLEEP`              | All valves have no previous opening command                                                         | `off`                   | Typical startup or no-command case.                                                  |
+| Not `SLEEP`              | A valve opening equals `100 - max_closing_degree`                                                   | `idle`                  | Equality does not produce `heating` when a positive command remains.                 |
+| Not `SLEEP`              | Multiple valves, with at least one heating                                                          | `heating`               | `heating` has priority.                                                              |
+| Not `SLEEP`              | Multiple valves, none heating, with at least one idle                                               | `idle`                  | Fallback after `heating`.                                                            |
+| Not `SLEEP`              | Multiple valves, all off                                                                            | `off`                   | No active or pending valve remains.                                                  |

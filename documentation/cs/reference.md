@@ -442,6 +442,7 @@ Vlastní atributy jsou následující:
 | ``total_energy``                                | Odhad celkové energie spotřebované tímto VTherm                                                                                                                                                              |
 | ``last_change_time_from_vtherm``                | Datum/čas poslední změny provedené VTherm                                                                                                                                                                    |
 | ``messages``                                    | Seznam zpráv vysvětlujících výpočet aktuálního stavu. Viz [stavové zprávy](#stavové-zprávy)                                                                                                                  |
+| ``unavailable_underlying_entities``             | Seznam podkladových entit (climate, switch, ventil, čísla otevření/zavření...), které jsou po spuštění VTherm `unavailable` nebo `unknown`. Prázdný, pokud jsou všechny dostupné                             |
 | ``is_sleeping``                                 | Indikuje, že VTherm je ve sleep režimu (platí pro `over_climate` s přímým řízením ventilu a `over_valve`)                                                                                                    |
 | ``is_recalculate_scheduled``                    | Indikuje, že přepočet stavu podřízených zařízení byl odložen časovým filtrem, aby se omezil počet interakcí s řízeným vybavením                                                                              |
 | **SECTION `configuration`**                     | ------                                                                                                                                                                                                       |
@@ -653,5 +654,22 @@ Vlastní atribut `specific_states.messages` obsahuje seznam kódů zpráv, kter�
 | `target_temp_activity_detected`     | Cílová teplota byla vynucena detekcí pohybu                                    |
 | `target_temp_activity_not_detected` | Cílová teplota byla vynucena nedetekovaným pohybem                             |
 | `target_temp_absence_detected`      | Cílová teplota byla vynucena detekcí nepřítomnosti                             |
+| `underlying_unavailable`            | Alespoň jedna podkladová entita je nedostupná nebo neznámá (viz `unavailable_underlying_entities`)|
 
 Poznámka: tyto zprávy jsou dostupné v [VTherm UI Card](additions.md#versatile-thermostat-ui-card) pod informační ikonou.
+
+## `hvac_action` s přímým řízením ventilu
+
+Pro VTherm `over_climate` s přímým řízením ventilu se `hvac_action` vypočítává ze skutečného otevření ventilu a posledního příkazu k otevření. Nezávisí na akci hlášené podřízenou entitou climate.
+
+| Podmínka VTherm          | Podmínka ventilu                                                                                 | Výsledné `hvac_action` | Poznámky                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------ | ---------------------- | ---------------------------------------------------------------------------------------- |
+| Interní režim je `SLEEP` | Jakékoli fyzické otevření, včetně 100 %                                                          | `off`                  | Vynucený stav: ventil může zůstat otevřený bez požadavku na topení nebo centrální kotel. |
+| Není `SLEEP`             | Alespoň jeden regulovaný ventil má skutečné otevření přísně větší než `100 - max_closing_degree` | `heating`              | Porovnání je přísné.                                                                     |
+| Není `SLEEP`             | Žádný ventil netopí, ale alespoň jeden ventil má kladný poslední příkaz k otevření               | `idle`                 | Ventil má příkaz k otevření, ale není považován za fyzicky aktivní.                      |
+| Není `SLEEP`             | Všechny ventily mají poslední příkaz k otevření `0`                                              | `off`                  | Nečeká žádné otevření.                                                                   |
+| Není `SLEEP`             | Žádný ventil nemá předchozí příkaz k otevření                                                    | `off`                  | Typický stav při spuštění nebo bez příkazu.                                              |
+| Není `SLEEP`             | Otevření ventilu se rovná `100 - max_closing_degree`                                             | `idle`                 | Rovnost nevytváří `heating`, pokud zůstává kladný příkaz.                                |
+| Není `SLEEP`             | Více ventilů, alespoň jeden topí                                                                 | `heating`              | `heating` má prioritu.                                                                   |
+| Není `SLEEP`             | Více ventilů, žádný netopí, ale alespoň jeden je v klidu                                         | `idle`                 | Náhradní stav po `heating`.                                                              |
+| Není `SLEEP`             | Více ventilů, všechny jsou vypnuté                                                               | `off`                  | Nezůstává žádný aktivní ani čekající ventil.                                             |
