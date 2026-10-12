@@ -4,11 +4,18 @@
 // patch on top of upstream's main). Runs weekly (Monday 03:00).
 //
 // A real merge, not a fast-forward: native-preset-mode always has unique patch
-// commits ahead of upstream/main, so --ff-only would fail on every run. If the
-// merge hits a conflict, it fails here and needs manual resolution.
+// commits ahead of upstream/main, so --ff-only would fail on every run.
+//
+// Every new upstream release conflicts on manifest.json's "version" line (the
+// fork bumps its own patch version on each release). That one case is resolved
+// automatically: if manifest.json is the only conflicted file and ours/theirs
+// differ in nothing but the version line, upstream's manifest is taken and the
+// release step re-bumps. Any other conflict aborts the merge and fails the job
+// for manual resolution.
 //
 // If the merge brought in new commits, also cuts a fork release: bumps the
-// patch version in manifest.json, tags it, and publishes a GitHub release with
+// patch version in manifest.json (from the higher of the fork's and upstream's
+// version, skipping any tag that already exists), tags it, and publishes a GitHub release with
 // the HACS zip asset. HACS picks up the new release on its own refresh cycle —
 // installing it in HA is a deliberate manual step (HACS update button), not
 // done here.
@@ -41,8 +48,32 @@ pipeline {
                         git remote add upstream https://github.com/jmcollin78/versatile_thermostat.git
                         git fetch upstream
                         git checkout native-preset-mode
+                        MANIFEST=custom_components/versatile_thermostat/manifest.json
+                        manifest_version() { grep -oP "\\"version\\":\\s*\\"\\K[^\\"]+" "$1"; }
+                        FORK_VERSION=$(manifest_version "$MANIFEST")
                         BEFORE=$(git rev-parse HEAD)
-                        git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"
+
+                        if ! git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"; then
+                            # The fork bumps its own patch version on every release, so
+                            # each new upstream release conflicts on that one line. Resolve
+                            # exactly that case (take upstream's manifest; the release step
+                            # below re-bumps past both versions); anything else still fails.
+                            CONFLICTS=$(git diff --name-only --diff-filter=U)
+                            git show ":2:$MANIFEST" 2>/dev/null | grep -v '"version"' > /tmp/vt_manifest_ours || true
+                            git show ":3:$MANIFEST" 2>/dev/null | grep -v '"version"' > /tmp/vt_manifest_theirs || true
+                            if [ "$CONFLICTS" = "$MANIFEST" ] && [ -s /tmp/vt_manifest_theirs ] \
+                                && cmp -s /tmp/vt_manifest_ours /tmp/vt_manifest_theirs; then
+                                echo "=== Only the manifest version line conflicts — taking upstream's manifest ==="
+                                git checkout --theirs "$MANIFEST"
+                                git add "$MANIFEST"
+                                git commit --no-edit
+                            else
+                                echo "=== Unresolvable merge conflict, manual intervention needed: ==="
+                                echo "$CONFLICTS"
+                                git merge --abort
+                                exit 1
+                            fi
+                        fi
                         AFTER=$(git rev-parse HEAD)
                         git push https://x-access-token:${GH_TOKEN}@github.com/d96moe/versatile_thermostat.git native-preset-mode
                         echo "=== Sync done: native-preset-mode is now at ==="
@@ -53,13 +84,21 @@ pipeline {
                             exit 0
                         fi
 
-                        MANIFEST=custom_components/versatile_thermostat/manifest.json
-                        CURRENT_VERSION=$(grep -oP "\\"version\\":\\s*\\"\\K[^\\"]+" "$MANIFEST")
-                        MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
-                        MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
-                        PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
-                        NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
-                        echo "=== Cutting fork release v$NEW_VERSION (was $CURRENT_VERSION) ==="
+                        # Bump from the HIGHER of the fork's pre-merge version and the
+                        # merged manifest (upstream's, if the conflict was resolved
+                        # above), so the version never goes backwards and never reuses
+                        # an existing fork tag.
+                        CURRENT_VERSION=$(manifest_version "$MANIFEST")
+                        BASE_VERSION=$(printf '%s\\n%s\\n' "$FORK_VERSION" "$CURRENT_VERSION" | sort -V | tail -1)
+                        MAJOR=$(echo "$BASE_VERSION" | cut -d. -f1)
+                        MINOR=$(echo "$BASE_VERSION" | cut -d. -f2)
+                        PATCH=$(echo "$BASE_VERSION" | cut -d. -f3)
+                        PATCH=$((PATCH + 1))
+                        while git rev-parse -q --verify "refs/tags/v${MAJOR}.${MINOR}.${PATCH}" >/dev/null; do
+                            PATCH=$((PATCH + 1))
+                        done
+                        NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                        echo "=== Cutting fork release v$NEW_VERSION (fork was $FORK_VERSION, merged manifest $CURRENT_VERSION) ==="
 
                         sed -i "s/\\"version\\": \\"$CURRENT_VERSION\\"/\\"version\\": \\"$NEW_VERSION\\"/" "$MANIFEST"
                         git commit -am "Bump version to $NEW_VERSION for HACS release (native-preset-mode fork)"
