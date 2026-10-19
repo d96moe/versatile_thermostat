@@ -418,10 +418,9 @@ async def test_user_config_flow_over_switch(
     assert result["result"].title == "TheOverSwitchMockName"
     assert isinstance(result["result"], ConfigEntry)
 
+
 @pytest.mark.parametrize("expected_lingering_tasks", [True])
 @pytest.mark.parametrize("expected_lingering_timers", [True])
-# TODO this test fails when run in // but works alone
-# @pytest.mark.skip
 async def test_user_config_flow_over_climate(
     hass: HomeAssistant, skip_hass_states_get
 ):  # pylint: disable=unused-argument
@@ -509,7 +508,7 @@ async def test_user_config_flow_over_climate(
             CONF_UNDERLYING_LIST: ["climate.mock_climate"],
             CONF_AC_MODE: False,
             CONF_AUTO_REGULATION_MODE: CONF_AUTO_REGULATION_STRONG,
-            CONF_AUTO_REGULATION_DTEMP: 0.5,
+            CONF_AUTO_REGULATION_DTEMP: 10,
             CONF_AUTO_REGULATION_PERIOD_MIN: 2,
             CONF_AUTO_FAN_MODE: CONF_AUTO_FAN_HIGH,
             CONF_AUTO_REGULATION_USE_DEVICE_TEMP: False,
@@ -600,6 +599,7 @@ async def test_user_config_flow_over_climate(
             CONF_SAFETY_DELAY_MIN: 5,
             CONF_SAFETY_MIN_ON_PERCENT: 0.4,
             CONF_SAFETY_DEFAULT_ON_PERCENT: 0.3,
+            CONF_MANUAL_OVERRIDE_DURATION_MIN: 30,
         },
     )
     assert result["type"] == FlowResultType.MENU
@@ -626,6 +626,7 @@ async def test_user_config_flow_over_climate(
         CONF_SAFETY_MIN_ON_PERCENT: 0.4,
         CONF_SAFETY_DEFAULT_ON_PERCENT: 0.3,
         CONF_REPAIR_INCORRECT_STATE: False,
+        CONF_MANUAL_OVERRIDE_DURATION_MIN: 30,
     } | MOCK_DEFAULT_FEATURE_CONFIG | {
         CONF_USE_MAIN_CENTRAL_CONFIG: False,
         CONF_USE_PRESETS_CENTRAL_CONFIG: False,
@@ -645,6 +646,7 @@ async def test_user_config_flow_over_climate(
         CONF_USED_BY_CENTRAL_BOILER: False,
         CONF_USE_CENTRAL_MODE: False,
         CONF_AUTO_REGULATION_MODE: CONF_AUTO_REGULATION_STRONG,
+        CONF_AUTO_REGULATION_DTEMP: 10,
         CONF_AUTO_START_STOP_LEVEL: AUTO_START_STOP_LEVEL_NONE,
         CONF_SYNC_DEVICE_INTERNAL_TEMP: False,
     }
@@ -881,6 +883,7 @@ async def test_user_config_flow_over_climate_auto_start_stop(
         CONF_SAFETY_MIN_ON_PERCENT: 0.4,
         CONF_SAFETY_DEFAULT_ON_PERCENT: 0.3,
         CONF_REPAIR_INCORRECT_STATE: False,
+        CONF_MANUAL_OVERRIDE_DURATION_MIN: 0,
     } | MOCK_DEFAULT_FEATURE_CONFIG | {
         CONF_USE_MAIN_CENTRAL_CONFIG: False,
         CONF_USE_TPI_CENTRAL_CONFIG: False,
@@ -1151,6 +1154,7 @@ async def test_user_config_flow_over_switch_bug_552_tpi(
             CONF_SAFETY_MIN_ON_PERCENT: 0.4,
             CONF_SAFETY_DEFAULT_ON_PERCENT: 0.3,
             CONF_REPAIR_INCORRECT_STATE: False,
+            CONF_MANUAL_OVERRIDE_DURATION_MIN: 0,
             CONF_USE_MAIN_CENTRAL_CONFIG: False,
             CONF_USE_TPI_CENTRAL_CONFIG: False,
             CONF_USE_PRESETS_CENTRAL_CONFIG: False,
@@ -1627,6 +1631,7 @@ async def test_user_config_flow_over_climate_valve(
         CONF_SAFETY_MIN_ON_PERCENT: 0.4,
         CONF_SAFETY_DEFAULT_ON_PERCENT: 0.3,
         CONF_REPAIR_INCORRECT_STATE: False,
+        CONF_MANUAL_OVERRIDE_DURATION_MIN: 0,
     } | MOCK_DEFAULT_FEATURE_CONFIG | {
         CONF_USE_MAIN_CENTRAL_CONFIG: False,
         CONF_USE_PRESETS_CENTRAL_CONFIG: False,
@@ -1893,3 +1898,51 @@ async def test_central_config_hidden_when_exists(hass: HomeAssistant, init_vther
     assert CONF_THERMOSTAT_CENTRAL_CONFIG in available_options3
 
     hass.config_entries.flow.async_abort(result3["flow_id"])
+
+
+async def test_config_flow_central_boiler_template_validation(hass: HomeAssistant, init_vtherm_api):
+    """A template in the central boiler command value is validated by the config flow"""
+    from custom_components.versatile_thermostat.config_flow import VersatileThermostatConfigFlow
+
+    flow = VersatileThermostatConfigFlow()
+    flow.hass = hass
+    flow._infos[CONF_USE_CENTRAL_BOILER_FEATURE] = True
+
+    valid = "climate.x/climate.set_temperature/temperature:{{ state_attr('climate.x', 'current_temperature') | float(20) / 2 + 1 }}"
+    await flow.validate_input(
+        {
+            CONF_CENTRAL_BOILER_ACTIVATION_SRV: valid,
+            CONF_CENTRAL_BOILER_DEACTIVATION_SRV: "switch.boiler/switch.turn_off",
+        },
+        "central_boiler",
+    )
+
+    with pytest.raises(ServiceConfigurationError) as err:
+        await flow.validate_input(
+            {
+                CONF_CENTRAL_BOILER_ACTIVATION_SRV: "climate.x/climate.set_temperature/temperature:{{ 1 + }}",
+                CONF_CENTRAL_BOILER_DEACTIVATION_SRV: "switch.boiler/switch.turn_off",
+            },
+            "central_boiler",
+        )
+    assert str(err.value) == CONF_CENTRAL_BOILER_ACTIVATION_SRV
+
+    with pytest.raises(ServiceConfigurationError) as err:
+        await flow.validate_input(
+            {
+                CONF_CENTRAL_BOILER_ACTIVATION_SRV: "switch.boiler/switch.turn_on",
+                CONF_CENTRAL_BOILER_DEACTIVATION_SRV: "climate.x/climate.set_temperature/temperature:{{ (1 }}",
+            },
+            "central_boiler",
+        )
+    assert str(err.value) == CONF_CENTRAL_BOILER_DEACTIVATION_SRV
+
+    with pytest.raises(ServiceConfigurationError) as err:
+        await flow.validate_input(
+            {
+                CONF_CENTRAL_BOILER_ACTIVATION_SRV: "climate.x/climate.set_temperature/temperature:{% if true %}18",
+                CONF_CENTRAL_BOILER_DEACTIVATION_SRV: "switch.boiler/switch.turn_off",
+            },
+            "central_boiler",
+        )
+    assert str(err.value) == CONF_CENTRAL_BOILER_ACTIVATION_SRV
