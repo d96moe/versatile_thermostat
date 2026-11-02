@@ -7,12 +7,14 @@
 
 ## Pré-requis
 
+Les vannes thermostatiques utilisables avec un _VTherm_ `over_valve`, comme la [Shelly BLU TRV](https://www.versatile-thermostat.org/fr/devices/over-valve/), sont listées dans le [catalogue des matériels](https://www.versatile-thermostat.org/fr/devices/?type=trv).
+
 L'installation doit ressembler à celle pour le VTherm `over_switch` sauf que l'équipement contrôlé est directement la vanne d'un _TRV_  :
 ![installation `over_valve`](images/over-valve-schema.png)
 
 1. L'utilisateur ou une automatisation ou le Scheduler programme une consigne (setpoint) par le biais d'un pré-réglage ou directement d'une température,
 2. régulièrement le thermomètre intérieur (2) ou extérieur (2b) ou interne à l'équipement (2c) envoie la température mesurée. Le thermomètre intérieur doit être placé à une place pertinente pour le ressenti de l'utilisateur : idéalement au milieu du lieu de vie. Evitez de le mettre trop près d'une fenêtre ou trop proche de l'équipement,
-3. avec les valeurs de consigne, les différentes températures et des paramètres de l'algorithme TPI (cf. [TPI](algorithms.md#lalgorithme-tpi)), VTherm va calculer un pourcentage d'ouverture de la vanne,
+3. avec les valeurs de consigne, les différentes températures et des paramètres de l'algorithme TPI (cf. [TPI](algorithms.md#lalgorithme-tpi) ou les [autres algorithmes](algorithms.md#autres-algorithmes-plugins)), VTherm va calculer un pourcentage d'ouverture de la vanne,
 4. et va modifier la valeur des entités `number` sous-jacentes,
 5. ces entités `number` sous-jacentes vont alors commander le taux d'ouverture de la vanne sur le _TRV_
 6. ce qui va faire chauffer plus ou moins le radiateur
@@ -23,11 +25,17 @@ L'installation doit ressembler à celle pour le VTherm `over_switch` sauf que l'
 ## Configuration
 
 Configurez d'abord les paramètres principaux et communs à tous les _VTherm_ (cf. [paramètres principaux](base-attributes.md)).
-Ensuite cliquez sur l'option de menu "Sous-jacents" et vous allez avoir cette page de configuration. Vous mettez les entités `numnber` ou `input_number`qui vont être controllés par le VTherm :
+Ensuite cliquez sur l'option de menu "Sous-jacents" et vous allez avoir cette page de configuration. Vous mettez les entités `number` ou `input_number`qui vont être controllés par le VTherm :
 
 ![image](images/config-linked-entity3.png)
 
-L'algorithme à utiliser est aujourd'hui limité à TPI est disponible. Voir [algorithme](#algorithme).
+Le champ « Algorithme » permet de choisir l'algorithme de régulation : le TPI intégré, ou un algorithme installé sous forme de plugin. Voir [les algorithmes](algorithms.md).
+
+### Seuil et période de régulation
+
+Deux champs limitent le nombre de commandes envoyées à la vanne :
+1. **Seuil de régulation** (défaut `10`) : variation minimale de l'ouverture, en %, en dessous de laquelle une nouvelle ouverture n'est pas envoyée,
+2. **Période minimale de régulation** (défaut `5` minutes) : délai minimal entre deux calculs de l'ouverture.
 
 ### Contrôle de l'ouverture de la vanne
 
@@ -72,3 +80,8 @@ contrôle d'ouverture : `max_opening_degrees` et les bornes de l'entité `number
 peuvent donc plafonner l'ouverture physique. Le sommeil ne sollicite pas la
 chaudière centrale ; l'attribut `is_sleeping` identifie cet état.
 
+## Étape suivante
+
+[Les coefficients du TPI](algorithms.md#configurez-les-coefficients-de-lalgorithme-tpi) : régler l'algorithme de régulation (menu « Paramètres TPI »). Sans configuration centrale, cette étape est nécessaire pour finaliser la création.
+
+Si vous utilisez un algorithme en plugin, comme SmartPI, suivez sa documentation, puis passez directement aux [presets](feature-presets.md).

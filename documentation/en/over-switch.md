@@ -8,9 +8,12 @@
     - [AC Mode](#ac-mode)
     - [Command Inversion](#command-inversion)
     - [Command Customization](#command-customization)
+  - [Next Step](#next-step)
 
 
 ## Prerequisites
+
+The electric heating devices that can be controlled by an `over_switch` _VTherm_ are listed in the [device catalog](https://www.versatile-thermostat.org/en/devices/?type=electric).
 
 The installation should look like this:
 
@@ -18,7 +21,7 @@ The installation should look like this:
 
 1. The user or automation, or the Scheduler, sets a setpoint via a preset or directly using a temperature.
 2. Periodically, the internal thermometer (2) or external thermometer (2b) sends the measured temperature. The internal thermometer should be placed in a relevant spot for the user's comfort: ideally in the middle of the living space. Avoid placing it too close to a window or too near the radiator.
-3. Based on the setpoint values, the different temperatures, and the TPI algorithm parameters (see [TPI](algorithms.md#lalgorithme-tpi)), VTherm will calculate a percentage of the on-time.
+3. Based on the setpoint values, the different temperatures, and the TPI algorithm parameters (see [TPI](algorithms.md#the-tpi-algorithm) or the [other algorithms](algorithms.md#other-algorithms-plugins)), VTherm will calculate a percentage of the on-time.
 4. It will then regularly command the turning on and off of the underlying `switch` (or `select` or `climate`) entities.
 5. These underlying entities will control the physical device.
 6. The physical switch will turn the radiator on or off.
@@ -28,7 +31,7 @@ The installation should look like this:
 ## Configuration
 
 First, configure the main settings common to all _VTherms_ (see [main settings](base-attributes.md)).
-Then, click on the "Underlying Entities" option from the menu, and you will see this configuration page:
+Then, click on the "Underlyings" option from the menu, and you will see this configuration page:
 
 ![image](images/config-linked-entity.png)
 
@@ -38,7 +41,7 @@ In the "list of devices to control," you add the switches that will be controlle
 
 If one of the underlying devices is not a `switch`, then command customization is mandatory. By default, for `switch` entities, the commands are the standard switch on/off commands (`turn_on`, `turn_off`).
 
-The algorithm currently available is TPI. See [algorithm](#algorithm).
+The "Algorithm" field selects the regulation algorithm: the built-in TPI, or an algorithm installed as a plugin. See [algorithms](algorithms.md).
 If multiple entities are configured, the thermostat staggers the activations to minimize the number of switches on at any given time. This allows for better power distribution, as each radiator will turn on in turn.
 
 VTherm will smooth the consumed power as much as possible by alternating activations. Example of staggered activations:
@@ -76,9 +79,9 @@ The available commands depend on the type of underlying device:
 | `switch` or `input_boolean` | `turn_on`                             | `turn_off`                                     | All switches                      |
 | `select` or `input_select`  | `select_option/option:comfort`        | `select_option/option:frost_protection`        | Nodon SIN-4-FP-21 and similar (*) |
 | `climate` (hvac_mode)       | `set_hvac_mode/hvac_mode:heat`        | `set_hvac_mode/hvac_mode:off`                  | eCosy (via Tuya Local)            |
-| `climate` (preset)          | `set_preset_mode/preset_mode:comfort` | `set_preset_mode/preset_mode:frost_protection` | Heatzy (*)                        |
+| `climate` (preset)          | `set_preset_mode/preset_mode:comfort` | `set_preset_mode/preset_mode:frost_protection` | Heaters with presets (*)          |
 
-(*) To use this case, it is important to ensure that the state of the underlying entity matches the preset. Otherwise, VTherm has no way of knowing whether your equipment is on or off. To verify this, go to Developer Tools / States, search for your underlying entity, and check if its state matches the name of a preset. If you see 'heat', 'off', or 'cool', these are not presets, and this configuration will not work. In this case, you must use a virtual switch. Examples of virtual switches can be found on the troubleshooting page. If you insist on using this configuration, carefully check the values accepted by your equipment in Developer Tools / States and search for your equipment. You will see the options it accepts. They must be identical, including case sensitivity.
+(*) To use this case, it is important to ensure that the state of the underlying entity matches the preset. Otherwise, VTherm has no way of knowing whether your equipment is on or off. To verify this, go to Developer Tools / States, search for your underlying entity, and check if its state matches the name of a preset. If you see 'heat', 'off', or 'cool', these are not presets, and this configuration will not work. In this case, you must use a virtual switch. Examples of virtual switches can be found on the troubleshooting page. If you insist on using this configuration, carefully check the values accepted by your equipment in Developer Tools / States and search for your equipment. You will see the options it accepts. They must be identical, including case sensitivity. The Heatzy does not meet this condition: use a virtual switch, as described on its [page in the device catalog](https://www.versatile-thermostat.org/en/devices/heatzy/).
 
 Of course, these examples can be adapted to your specific case.
 
@@ -95,3 +98,9 @@ This means that one of the entered commands is invalid. The following rules must
 1. Each command must follow the format `command[/attribute[:value]]` (e.g., `select_option/option:comfort` or `turn_on`) without spaces or special characters except `_`.
 2. There must be as many commands as there are declared underlying devices, except when all underlying devices are `switch` entities, in which case command customization is not required.
 3. If multiple underlying devices are configured, the commands must be in the same order. The number of on commands must equal the number of off commands and the number of underlying devices (in the correct order). It is possible to mix different types of underlying devices. As soon as one underlying device is not a `switch`, all commands for all underlying devices, including `switch` entities, must be configured.
+
+## Next Step
+
+[The TPI coefficients](algorithms.md#configuring-the-tpi-algorithm-coefficients): tune the regulation algorithm ("TPI parameters" menu). Without a central configuration, this step is required to finalize the creation.
+
+If you use an algorithm provided by a plugin, such as SmartPI, follow its documentation, then go directly to the [presets](feature-presets.md).

@@ -5,6 +5,7 @@
   - [Utilisation d'un Heatzy](#utilisation-dun-heatzy)
   - [Utilisation d'un radiateur avec un fil pilote (Nodon SIN-4-FP-21)](#utilisation-dun-radiateur-avec-un-fil-pilote-nodon-sin-4-fp-21)
   - [Utilisation d'un système Netatmo](#utilisation-dun-système-netatmo)
+  - [La chaudière centrale ne fonctionne pas](#la-chaudière-centrale-ne-fonctionne-pas)
   - [Seul le premier radiateur chauffe](#seul-le-premier-radiateur-chauffe)
   - [Le pourcentage VTherm et le degré d'ouverture de la vanne diffèrent](#le-pourcentage-vtherm-et-le-degré-douverture-de-la-vanne-diffèrent)
   - [Le radiateur chauffe alors que la température de consigne est dépassée ou ne chauffe pas alors que la température de la pièce est bien en-dessous de la consigne](#le-radiateur-chauffe-alors-que-la-température-de-consigne-est-dépassée-ou-ne-chauffe-pas-alors-que-la-température-de-la-pièce-est-bien-en-dessous-de-la-consigne)
@@ -27,43 +28,11 @@
 
 ## Utilisation d'un Heatzy
 
-Le Heatzy est maintenant pris en charge nativement par _VTherm_. Cf. [Démarrage rapide](quick-start.md#heatzy-ou-ecosy-ou-assimilé-entité-climate).
-
-Cette configuration est gardée pour mémoire uniquement.
-
-L'utilisation d'un Heatzy ou Nodon est possible à la condition d'utiliser un switch virtuel sur ce modèle :
-
-```yaml
-- platform: template
-  switches:
-    chauffage_sdb:
-      unique_id: chauffage_sdb
-      friendly_name: Chauffage salle de bain
-      value_template: "{{ is_state_attr('climate.salle_de_bain', 'preset_mode', 'comfort') }}"
-      icon_template: >-
-        {% if is_state_attr('climate.salle_de_bain', 'preset_mode', 'comfort') %}
-          mdi:radiator
-        {% elif is_state_attr('climate.salle_de_bain', 'preset_mode', 'away') %}
-          mdi:snowflake
-        {% else %}
-          mdi:radiator-disabled
-        {% endif %}
-      turn_on:
-        service: climate.set_preset_mode
-        entity_id: climate.salle_de_bain
-        data:
-          preset_mode: "comfort"
-      turn_off:
-        service: climate.set_preset_mode
-        entity_id: climate.salle_de_bain
-        data:
-          preset_mode: "eco"
-```
-Merci à @gael pour cet exemple.
+L'intégration Heatzy expose une entité `climate` dont l'état n'est pas le preset actif. Utilisez-la à travers un interrupteur virtuel, comme décrit sur la [page Heatzy](https://www.versatile-thermostat.org/fr/devices/heatzy/) du catalogue des matériels.
 
 ## Utilisation d'un radiateur avec un fil pilote (Nodon SIN-4-FP-21)
 
-Le Nodon est maintenant pris en charge nativement par _VTherm_. Cf. [Démarrage rapide](quick-start.md#nodon-sin-4-fp-21-ou-assimilé-fil-pilote).
+Le Nodon est pris en charge nativement par un _VTherm_ `over_switch` avec des commandes personnalisées : voir la [page des modules fil pilote](https://www.versatile-thermostat.org/fr/devices/pilot-wire-module/) du catalogue des matériels.
 
 Cette configuration est gardée pour mémoire uniquement.
 
@@ -101,7 +70,14 @@ Exemple :
 Un exemple plus complet est [ici](https://github.com/jmcollin78/versatile_thermostat/discussions/431#discussioncomment-11393065)
 
 ## Utilisation d'un système Netatmo
-Le système à base de TRV Netatmo fonctionne mal avec _VTherm_. Vous avez ici une discussion sur le fonctionnement particulier des systèmes Netatmo (en Français) : https://forum.hacf.fr/t/vannes-netatmo-et-vtherm/56063
+Le système à base de TRV Netatmo fonctionne mal avec _VTherm_. Vous avez ici une discussion sur le fonctionnement particulier des systèmes Netatmo (en Français) : https://forum.hacf.fr/t/vannes-netatmo-et-vtherm/56063. Ses limitations connues sont aussi décrites dans le [catalogue des matériels](https://www.versatile-thermostat.org/fr/devices/known-limitations/).
+
+## La chaudière centrale ne fonctionne pas
+
+Si la chaudière centrale ne se déclenche pas alors qu'un _VTherm_ demande du chauffage, vérifiez les trois points suivants :
+1. La fonction de chaudière centrale est activée dans la configuration centrale (« Ajouter une chaudière centrale »),
+2. Dans la configuration principale de chaque _VTherm_ qui doit la piloter, l'option « Déclencheur de chaudière centrale » est cochée.
+3. Enfin, dans les entités de la configuration centrale, le seuil de déclenchement par nombre d'équipements (`number.boiler_activation_threshold`) ou par puissance (`number.boiler_power_activation_threshold`) est configuré avec une valeur adaptée et supérieure à zéro. Seuls les équipements des _VTherm_ marqués comme déclencheurs sont comptabilisés, et la chaudière est activée dès que l'un des seuils non nul est franchi. Voir [le contrôle d'une chaudière centrale](feature-central-boiler.md) et le [choix des attributs de base](base-attributes.md#choix-des-attributs-de-base).
 
 ## Seul le premier radiateur chauffe
 
@@ -162,7 +138,7 @@ Exemple:
 
 [security mode](images/security-mode-symptome1.png)
 
-Si vous avez installé la carte [Versatile Thermostat UI Card](https://github.com/jmcollin78/versatile-thermostat-ui-card), le _VTherm_ en question aura cette forme là :
+Si vous avez installé la carte [Versatile Thermostat UI Card](https://www.versatile-thermostat.org/fr/plugins/#jmcollin78/versatile-thermostat-ui-card), le _VTherm_ en question aura cette forme là :
 
 [security mode UI Card](images/security-mode-symptome2.png)
 
@@ -236,6 +212,8 @@ Pour collecter et analyser les logs du Versatile Thermostat, **il est vivement r
 
 Consultez la documentation complète : [Télécharger les logs passés - Diagnostic et dépannage](feature-logs-collector.md)
 
+Le fichier téléchargé peut ensuite être ouvert dans l'[analyseur de logs](https://www.versatile-thermostat.org/fr/debugger/) du site pour visualiser ce qui s'est passé. Pour ouvrir une issue, vous pouvez aussi joindre un extrait exporté depuis l'analyseur, centré sur la période du problème.
+
 ### Activer les logs dans Home Assistant (ancienne méthode)
 
 Si vous avez besoin d'un mode de débogage plus avancé, vous pouvez activer les logs au niveau de Home Assistant en éditant le fichier `logger.yaml` :
@@ -250,6 +228,8 @@ logger:
 Vous devez recharger la configuration YAML (Outils de développement / YAML / Toute la configuration YAML) ou redémarrer Home Assistant pour que ce changement soit pris en compte.
 
 ⚠️ **Attention** : En mode debug, Versatile Thermostat est très verbeux et peut ralentir Home Assistant ou saturer votre disque dur. Cette approche n'est recommandée que pour un débogage avancé sur une courte durée. **Préférez le log-collector dans tous les cas normaux.**
+
+Le fichier `home-assistant.log` ainsi obtenu peut aussi être ouvert dans l'[analyseur de logs](https://www.versatile-thermostat.org/fr/debugger/).
 
 ## VTherm ne suit pas les changements de consigne faits directement depuis le sous-jacents (`over_climate`)
 

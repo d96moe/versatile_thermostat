@@ -8,9 +8,12 @@
     - [Klimaanelagenmodus/AC Modus](#klimaanelagenmodusac-modus)
     - [Befehlsumkehr](#befehlsumkehr)
     - [Befehlsanpassung](#befehlsanpassung)
+  - [Nächster Schritt](#nächster-schritt)
 
 
 ## Voraussetzungen
+
+Die elektrischen Heizgeräte, die von einem `over_switch`-_VTherm_ gesteuert werden können, sind im [Gerätekatalog](https://www.versatile-thermostat.org/de/devices/?type=electric) aufgeführt.
 
 Die Installation sollte in etwa so aussehen:
 
@@ -18,7 +21,7 @@ Die Installation sollte in etwa so aussehen:
 
 1. Der Sollwert wird direkt über die Temperatur durch einen Benutzer, einer Automation oder einen Zeitplan eingestellt.
 2. In regelmäßigen Abständen sendet das Innenthermometer (2) oder das Außenthermometer (2b) die gemessene Temperatur. Das interne Thermometer sollte an einer für den Komfort des Benutzers relevanten Stelle angebracht werden: idealerweise in der Mitte des Wohnraums. Vermeiden Sie es, es zu nah an einem Fenster oder in der Nähe eines Heizkörpers zu platzieren.
-3. Auf der Grundlage der Sollwerte, der verschiedenen Temperaturen und der Parameter des TPI-Algorithmus (siehe [TPI](algorithms.md#lalgorithmus-tpi)) berechnet VTherm einen Prozentsatz der Einschaltdauer.
+3. Auf der Grundlage der Sollwerte, der verschiedenen Temperaturen und der Parameter des TPI-Algorithmus (siehe [TPI](algorithms.md#der-tpi-algorithmus) oder die [weiteren Algorithmen](algorithms.md#weitere-algorithmen-plugins)) berechnet VTherm einen Prozentsatz der Einschaltdauer.
 4. Es wird dann regelmäßig das Ein- und Ausschalten der zugehörigen `Schalter` (oder `select` oder `climate`) veranlassen.
 5. Diese zugehörigen Entitäten steuern das physische Gerät.
 6. Der physische Schalter schaltet den Heizkörper ein oder aus.
@@ -28,7 +31,7 @@ Die Installation sollte in etwa so aussehen:
 ## Konfiguration
 
 Konfigurieren Sie zunächst die Haupteinstellungen, die für alle _VTherms_ gelten (siehe [Haupteinstellung](base-attributes.md)).
-Klicken Sie dann im Menü auf die Option "Zugehörige Entities", um diese Konfigurationsseite anzuzeigen:
+Klicken Sie dann im Menü auf die Option „Basiswerte“, um diese Konfigurationsseite anzuzeigen:
 
 ![image](images/config-linked-entity.png)
 
@@ -38,7 +41,7 @@ In der "Liste der zu steuernden Geräte" fügen Sie die Schalter hinzu, die von 
 
 Handelt es sich bei einem der zugehörigen Geräte nicht um einen `switch`, so ist die Anpassung der Befehle obligatorisch. Standardmäßig sind die Befehle für `switch`-Entities die Standard-Ein-/Ausschaltbefehle (`turn_on`, `turn_off`).
 
-Der derzeit verfügbare Algorithmus ist TPI. Siehe [Algorithmus](#algorithm).
+Im Feld „Algorithmus“ wählen Sie den Regelalgorithmus: den integrierten TPI oder einen als Plugin installierten Algorithmus. Siehe [Algorithmen](algorithms.md).
 Wenn mehrere Einheiten konfiguriert sind, staffelt der Thermostat die Aktivierungen, um die Anzahl der eingeschalteten Schalter zu einem bestimmten Zeitpunkt zu minimieren. Dies ermöglicht eine bessere Energieverteilung, da sich jeder Heizkörper nacheinander einschaltet.
 
 VTherm glättet die verbrauchte Leistung so weit wie möglich durch abwechselnde Aktivierungen. Beispiel für gestaffelte Aktivierungen:
@@ -76,9 +79,9 @@ Die verfügbaren Befehle hängen von der Art des zugehörigen Geräts ab:
 | `switch` odr `input_boolean` | `turn_on`                             | `turn_off`                                     | Alle Schalter                     |
 | `select` oder `input_select` | `select_option/option:comfort`        | `select_option/option:frost_protection`        | Nodon SIN-4-FP-21 und ähnlich (*) |
 | `climate` (HKL-Modus)        | `set_hvac_mode/hvac_mode:heat`        | `set_hvac_mode/hvac_mode:off`                  | eCosy (via Tuya Local)            |
-| `climate` (Voreinstellung)   | `set_preset_mode/preset_mode:comfort` | `set_preset_mode/preset_mode:frost_protection` | Heatzy (*)                        |
+| `climate` (Voreinstellung)   | `set_preset_mode/preset_mode:comfort` | `set_preset_mode/preset_mode:frost_protection` | Heizkörper mit Voreinstellungen (*) |
 
-(*) Um diesen Fall nutzen zu können, ist es wichtig sicherzustellen, dass der Zustand der zugrunde liegenden Entität mit dem Preset übereinstimmt. Andernfalls hat VTherm keine Möglichkeit zu wissen, ob Ihr Gerät ein- oder ausgeschaltet ist. Um dies zu überprüfen, gehen Sie zu Entwicklerwerkzeuge / Zustände, suchen Sie Ihre zugrunde liegende Entität und prüfen Sie, ob ihr Zustand mit dem Namen eines Presets übereinstimmt. Wenn Sie 'heat', 'off' oder 'cool' sehen, sind dies keine Presets, und diese Konfiguration wird nicht funktionieren. In diesem Fall müssen Sie einen virtuellen Schalter verwenden. Beispiele für virtuelle Schalter finden Sie auf der Seite Fehlerbehebung. Wenn Sie dennoch mit dieser Konfiguration fortfahren möchten, überprüfen Sie sorgfältig die von Ihrem Gerät akzeptierten Werte in Entwicklerwerkzeuge / Zustände und suchen Sie Ihr Gerät. Sie werden die Optionen sehen, die es akzeptiert. Diese müssen identisch sein, einschließlich der Groß- und Kleinschreibung.
+(*) Um diesen Fall nutzen zu können, ist es wichtig sicherzustellen, dass der Zustand der zugrunde liegenden Entität mit dem Preset übereinstimmt. Andernfalls hat VTherm keine Möglichkeit zu wissen, ob Ihr Gerät ein- oder ausgeschaltet ist. Um dies zu überprüfen, gehen Sie zu Entwicklerwerkzeuge / Zustände, suchen Sie Ihre zugrunde liegende Entität und prüfen Sie, ob ihr Zustand mit dem Namen eines Presets übereinstimmt. Wenn Sie 'heat', 'off' oder 'cool' sehen, sind dies keine Presets, und diese Konfiguration wird nicht funktionieren. In diesem Fall müssen Sie einen virtuellen Schalter verwenden. Beispiele für virtuelle Schalter finden Sie auf der Seite Fehlerbehebung. Wenn Sie dennoch mit dieser Konfiguration fortfahren möchten, überprüfen Sie sorgfältig die von Ihrem Gerät akzeptierten Werte in Entwicklerwerkzeuge / Zustände und suchen Sie Ihr Gerät. Sie werden die Optionen sehen, die es akzeptiert. Diese müssen identisch sein, einschließlich der Groß- und Kleinschreibung. Der Heatzy erfüllt diese Bedingung nicht: Verwenden Sie einen virtuellen Schalter, wie auf seiner [Seite im Gerätekatalog](https://www.versatile-thermostat.org/de/devices/heatzy/) beschrieben.
 
 Natürlich können diese Beispiele an Ihren speziellen Fall angepasst werden.
 
@@ -95,3 +98,9 @@ Dies bedeutet, dass einer der eingegebenen Befehle ungültig ist. Die folgenden 
 1. Jeder Befehl muss dem Format `Befehl[/Attribut[:Wert]]` folgen (z.B. `select_option/option:comfort` oder `turn_on`) ohne Leer- oder Sonderzeichen außer `_`.
 2. Es müssen so viele Befehle vorhanden sein, wie zugeordnete Geräte vorhanden sind, es sei denn, alle zugeordneten Geräte sind „Switch“-Entities; in diesem Fall ist eine Anpassung der Befehle nicht erforderlich.
 3. Wenn mehrere zugeordnete Geräte konfiguriert sind, müssen die Befehle in der gleichen Reihenfolge erfolgen. Die Anzahl der Einschaltbefehle muss der Anzahl der Ausschaltbefehle und der Anzahl der zugeordneten Geräte (in der richtigen Reihenfolge) entsprechen. Es ist möglich, verschiedene Typen von Basisgeräten zu mischen. Sobald ein zugeordnetes Gerät kein `switch` ist, müssen alle Befehle für alle zugeordneten Geräte, einschließlich `switch`-Entities, konfiguriert werden.
+
+## Nächster Schritt
+
+[Die TPI-Koeffizienten](algorithms.md#konfigurieren-der-tpi-algorithmusfaktoren): den Regelalgorithmus einstellen (Menü „TPI-Parameter“). Ohne zentrale Konfiguration ist dieser Schritt erforderlich, um die Erstellung abzuschließen.
+
+Wenn Sie einen Algorithmus aus einem Plugin verwenden, etwa SmartPI, folgen Sie dessen Dokumentation und gehen Sie dann direkt zu den [Voreinstellungen](feature-presets.md).

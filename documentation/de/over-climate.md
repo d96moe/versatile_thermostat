@@ -5,14 +5,17 @@
   - [Konfiguration](#konfiguration)
     - [Die zugeordneten Geräte](#die-zugeordneten-geräte)
     - [Klimaanlagenmodus/AC Modus](#klimaanlagenmodusac-modus)
-    - [Synchronization of the internal temperature of underlying entities](#synchronization-of-the-internal-temperature-of-underlying-entities)
+    - [Synchronisierung der Innentemperatur der zugrunde liegenden Geräte](#synchronisierung-der-innentemperatur-der-zugrunde-liegenden-geräte)
     - [Selbstregulierung](#selbstregulierung)
     - [Auto-Fan (Automatische Belüftung)](#auto-fan-automatische-belüftung)
     - [Kompensation der Innentemperatur des zugehörigen Geräts](#kompensation-der-innentemperatur-des-zugehörigen-geräts)
   - [Besondere Funktionen](#besondere-funktionen)
   - [Verfolgung grundlegender Temperaturänderungen](#verfolgung-grundlegender-temperaturänderungen)
+  - [Nächster Schritt](#nächster-schritt)
 
 ## Voraussetzungen
+
+Die Geräte, die von einem `over_climate`-_VTherm_ gesteuert werden können (Klimaanlagen, Wärmepumpen, TRV...), sind im [Gerätekatalog](https://www.versatile-thermostat.org/de/devices/?type=climate) aufgeführt, die Thermostatventile im [TRV-Katalog](https://www.versatile-thermostat.org/de/devices/?type=trv).
 
 Die Installation sollte etwa so aussehen::
 
@@ -27,7 +30,7 @@ Die Installation sollte etwa so aussehen::
 ## Konfiguration
 
 Konfigurieren Sie zunächst die Haupteinstellungen, die für alle _VTherms_ gelten (siehe [Haupteinstellungen](base-attributes.md)).
-Klicken Sie dann im Menü auf die Option "Zugeordnete Entities", um diese Konfigurationsseite anzuzeigen:
+Klicken Sie dann im Menü auf die Option „Basiswerte“, um diese Konfigurationsseite anzuzeigen:
 
 ![image](images/config-linked-entity2.png)
 
@@ -38,7 +41,7 @@ In der Liste „Zu steuernde Geräte“ sollten Sie die `climate`-Entities hinzu
 
 Sie können einen `over_climate`-Thermostat zur Steuerung einer Klimaanlage (reversibel oder nicht) wählen, indem Sie das Kästchen "AC Mode" markieren. Wenn das Gerät dies zulässt, sind die beiden Modi 'Heizen' und 'Kühlen' verfügbar.
 
-### Synchronization of the internal temperature of underlying entities
+### Synchronisierung der Innentemperatur der zugrunde liegenden Geräte
 This function allows for much better regulation as it synchronizes the internal thermometer of the underlying `climate` entities with the room temperature measured by _VTherm_. It is described [here](feature-sync_device_temp.md).
 
 ### Selbstregulierung
@@ -63,7 +66,7 @@ Sie können aus den folgenden Optionen wählen, welche Lüftungsstufe aktiviert 
 Natürlich muss Ihr Gerät über eine Belüftung verfügen, und diese muss regelbar sein, damit dies funktioniert. Wenn Ihr Gerät nicht über den Turbo-Modus verfügt, wird stattdessen der Hoch-Modus verwendet. Sobald der Temperaturunterschied wieder klein wird, schaltet die Lüftung auf einen "normalen" Modus um, in Abhängigkeit von Ihrem Gerät (in dieser Reihenfolge): `Stumm`, `Quiet`, `Auto`, `Niedrig`. Es wird der erste verfügbare Modus für Ihr Gerät gewählt.
 
 > ![Tipp](images/tips.png) _*Externes Plugin*_
-> Eine erweiterte Version von Auto-Fan ist als externes Plugin verfügbar. Dieses Plugin bietet zusätzliche Konfigurationsmöglichkeiten und eine feinere Steuerung der automatischen Belüftung. Auf der Seite [Plugins](https://www.versatile-thermostat.org/fr/plugins/) können Sie dieses Plugin entdecken.
+> Eine erweiterte Version von Auto-Fan ist als externes Plugin verfügbar. Dieses Plugin bietet zusätzliche Konfigurationsmöglichkeiten und eine feinere Steuerung der automatischen Belüftung. Auf der Seite [Plugins](https://www.versatile-thermostat.org/de/plugins/#jmcollin78/vtherm_auto_fan_extended) können Sie dieses Plugin entdecken.
 
 ### Kompensation der Innentemperatur des zugehörigen Geräts
 
@@ -113,3 +116,11 @@ Seien Sie vorsichtig, beim verwenden dieser Funktion, wird Ihr Gerät jetzt auf 
 
 Einige Geräte (wie z. B. Daikin) ändern ihren Zustand von selbst. Wenn das Kontrollkästchen aktiviert ist, kann es sein, dass _VTherm_ ausgeschaltet wird, obwohl Sie das nicht beabsichtigt haben.
 Deshalb ist es besser, sie nicht zu verwenden. Es führt zu viel Verwirrung und vielen Supportanfragen.
+
+> ![Tipp](images/tips.png) _*Physische Fernbedienung*_
+> Wenn Sie einen separaten physischen Thermostat (z. B. einen Wandthermostat) als Fernbedienung für ein _VTherm_ verwenden möchten, sehen Sie sich das Plugin [VTherm climate replication](https://www.versatile-thermostat.org/de/plugins/#jmcollin78/vtherm_climate_replication) an.
+
+## Nächster Schritt
+
+- Mit Selbstregulierung durch direkte Ventilsteuerung: die [Ventilregelung](self-regulation.md#selbstregulierung-bei-direkter-ventilkontrolle) konfigurieren, dann die [TPI-Koeffizienten](algorithms.md#konfigurieren-der-tpi-algorithmusfaktoren).
+- Ohne direkte Ventilsteuerung: bei Bedarf die [Selbstregulierung](self-regulation.md#andere-selbsregulierung) einstellen, dann zu den [Voreinstellungen](feature-presets.md) wechseln (Menü „Temperaturvoreinstellungen“).

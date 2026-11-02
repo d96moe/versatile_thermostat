@@ -7,12 +7,16 @@
     - [AC Mode](#ac-mode)
     - [Synchronization of the internal temperature of underlying entities](#synchronization-of-the-internal-temperature-of-underlying-entities)
     - [Self-Regulation](#self-regulation)
+    - [Valve regulation startup with write-only degrees](#valve-regulation-startup-with-write-only-degrees)
     - [Auto-Fan (Auto Ventilation)](#auto-fan-auto-ventilation)
     - [Compensating for the Internal Temperature of the Underlying Equipment](#compensating-for-the-internal-temperature-of-the-underlying-equipment)
   - [Specific Functions](#specific-functions)
   - [Follow Underlying Temperature Changes](#follow-underlying-temperature-changes)
+  - [Next Step](#next-step)
 
 ## Prerequisites
+
+Devices that can be controlled by an `over_climate` _VTherm_ (air conditioners, heat pumps, TRVs...) are listed in the [device catalog](https://www.versatile-thermostat.org/en/devices/?type=climate), and the thermostatic valves in the [TRV catalog](https://www.versatile-thermostat.org/en/devices/?type=trv).
 
 The installation should look like this:
 
@@ -27,7 +31,7 @@ The installation should look like this:
 ## Configuration
 
 First, configure the main settings common to all _VTherms_ (see [main settings](base-attributes.md)).
-Then, click on the "Underlying Entities" option from the menu, and you will see this configuration page:
+Then, click on the "Underlyings" option from the menu, and you will see this configuration page:
 
 ![image](images/config-linked-entity2.png)
 
@@ -73,7 +77,7 @@ You can choose which ventilation level to activate from the following options: L
 Of course, your underlying equipment must have ventilation, and it must be controllable for this to work. If your equipment doesn't include the Turbo mode, the High mode will be used instead. Once the temperature difference becomes small again, the ventilation will switch to a "normal" mode, which depends on your equipment (in order): `Mute`, `Quiet`, `Auto`, `Low`. The first available mode for your equipment will be chosen.
 
 > ![Tip](images/tips.png) _*External plugin*_
-> An enhanced version of auto-fan is available as an external plugin. This plugin offers additional configuration options and finer control of automatic ventilation. Check the [plugins](https://www.versatile-thermostat.org/fr/plugins/) page to discover this plugin.
+> An enhanced version of auto-fan is available as an external plugin. This plugin offers additional configuration options and finer control of automatic ventilation. Check the [plugins](https://www.versatile-thermostat.org/en/plugins/#jmcollin78/vtherm_auto_fan_extended) page to discover this plugin.
 
 ### Compensating for the Internal Temperature of the Underlying Equipment
 
@@ -120,9 +124,21 @@ If you are in this case, an entity has been added to the _VTherm_ device called 
 
 ![Track temperature changes](images/entity-follow-under-temp-change.png)
 
-When this entity is 'On', all temperature or state changes made directly on the underlying equipment are reflected in _VTherm_.
+When this entity is 'On', HVAC mode changes continue to be followed as before. Setpoint tracking is active from startup, even if _VTherm_ has not yet sent an order to the TRV. A newly observed setpoint is retained as a candidate and applied if it remains stable for five seconds; each distinct new value restarts the wait. Duplicates do not extend it. If _VTherm_ has already sent a setpoint, equal or nearby values are ambiguous and are not adopted automatically. Without a sent-setpoint reference, an old distinct echo can be mistaken for a manual action.
 
-Be careful, if you use this feature, your equipment is now controlled in two ways: _VTherm_ and directly by you. The commands might be contradictory, which could lead to confusion about the equipment's state. _VTherm_ is equipped with a delay mechanism that prevents loops: the user gives a setpoint, which is captured by _VTherm_ and changes the setpoint, ... This delay may cause the change made directly on the equipment to be ignored if these changes are too close together in time.
+Be careful: your equipment is controlled in two ways, by _VTherm_ and directly by you, so commands may conflict. An admissible TRV action switches _VTherm_ to a manual setpoint (`NONE`), cancels an older timed override without restoring its previous request, and does not start a new timed override. Window and protection priorities remain unchanged. While OFF, the request is saved without turning the thermostat on or clearing a forced OFF.
+
+Tracking suspends further tracking-induced physical setpoint commands after three attempts per _VTherm_; the third is sent and the fourth is blocked. Direct control from _VTherm_ remains available. A new command received through the _VTherm_ interface or an HA service rearms the counter, including commands from automations reacting to the TRV. Such an automation can rearm it on every turn, so the limit of three applies between received commands, not to the whole loop. After a Home Assistant restart or integration reload, the counter starts at zero and tracking is rearmed. A restored TRV value without a newly observed change is not adopted; once the TRV reports a new setpoint, it can be tracked without waiting for an order from _VTherm_. Without a sent-setpoint reference, an old distinct echo can be mistaken for an action.
+
+An old return that differs from the last command can still be mistaken for a manual action; an ambiguous return can instead be rejected. The five-second wait does not prove where a change came from and does not guarantee that every action is captured or that an external automation cannot sustain a loop.
 
 Some equipment (like Daikin, for example) changes state by itself. If the checkbox is checked, it may turn off the _VTherm_ when that's not what you intended.
 That's why it's better not to use it. It generates a lot of confusion and many support requests.
+
+> ![Tip](images/tips.png) _*Physical remote control*_
+> If you want to use a separate physical thermostat (a wall thermostat for example) as a remote control for a _VTherm_, see the [VTherm climate replication](https://www.versatile-thermostat.org/en/plugins/#jmcollin78/vtherm_climate_replication) plugin.
+
+## Next Step
+
+- With self-regulation by direct valve control: configure the [valve regulation](self-regulation.md#self-regulation-by-direct-valve-control), then the [TPI coefficients](algorithms.md#configuring-the-tpi-algorithm-coefficients).
+- Without direct valve control: adjust the [self-regulation](self-regulation.md#other-self-regulation) if needed, then go to the [presets](feature-presets.md) ("Presets" menu).

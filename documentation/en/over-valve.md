@@ -6,13 +6,15 @@
 
 ## Prerequisites
 
+The thermostatic valves usable with an `over_valve` _VTherm_, such as the [Shelly BLU TRV](https://www.versatile-thermostat.org/en/devices/over-valve/), are listed in the [device catalog](https://www.versatile-thermostat.org/en/devices/?type=trv).
+
 The installation should be similar to the `over_switch` VTherm setup, except that the controlled equipment is directly the valve of a _TRV_:
 
 ![installation `over_valve`](images/over-valve-schema.png)
 
 1. The user or automation, or the Scheduler, sets a setpoint via a preset or directly using a temperature.
 2. Periodically, the internal thermometer (2) or external thermometer (2b) or internal thermometer of the equipment (2c) sends the measured temperature. The internal thermometer should be placed in a relevant spot for the user's comfort: ideally in the middle of the living space. Avoid placing it too close to a window or too near the equipment.
-3. Based on the setpoint values, the different temperatures, and the TPI algorithm parameters (see [TPI](algorithms.md#lalgorithme-tpi)), VTherm will calculate the valve's opening percentage.
+3. Based on the setpoint values, the different temperatures, and the TPI algorithm parameters (see [TPI](algorithms.md#the-tpi-algorithm) or the [other algorithms](algorithms.md#other-algorithms-plugins)), VTherm will calculate the valve's opening percentage.
 4. It will then modify the value of the underlying `number` entities.
 5. These underlying `number` entities will control the valve opening rate on the _TRV_.
 6. This will regulate the radiator's heating.
@@ -22,11 +24,17 @@ The installation should be similar to the `over_switch` VTherm setup, except tha
 ## Configuration
 
 First, configure the main settings common to all _VTherms_ (see [main settings](base-attributes.md)).
-Then, click on the "Underlying Entities" option from the menu, and you will see this configuration page, you should add the `number` entities that will be controlled by VTherm. Only `number` or `input_number` entities are accepted.
+Then, click on the "Underlyings" option from the menu, and you will see this configuration page, you should add the `number` entities that will be controlled by VTherm. Only `number` or `input_number` entities are accepted.
 
 ![image](images/config-linked-entity3.png)
 
-The algorithm currently available is TPI. See [algorithm](#algorithm).
+The "Algorithm" field selects the regulation algorithm: the built-in TPI, or an algorithm installed as a plugin. See [algorithms](algorithms.md).
+
+### Regulation Threshold and Period
+
+Two fields limit the number of commands sent to the valve:
+1. **Regulation threshold** (default `10`): minimum change of the opening, in %, below which a new opening is not sent,
+2. **Regulation minimum period** (default `5` minutes): minimum time between two calculations of the opening.
 
 ### Valve opening control
 
@@ -68,3 +76,9 @@ sending a raw 100% opening request to every underlying valve. This request still
 uses the normal opening-control conversion: `max_opening_degrees` and the
 underlying `number` limits can therefore cap the physical opening. Sleep mode
 does not request central boiler heating; `is_sleeping` identifies this state.
+
+## Next Step
+
+[The TPI coefficients](algorithms.md#configuring-the-tpi-algorithm-coefficients): tune the regulation algorithm ("TPI parameters" menu). Without a central configuration, this step is required to finalize the creation.
+
+If you use an algorithm provided by a plugin, such as SmartPI, follow its documentation, then go directly to the [presets](feature-presets.md).

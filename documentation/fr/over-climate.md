@@ -11,8 +11,11 @@
     - [Compenser la température interne du sous-jacent](#compenser-la-température-interne-du-sous-jacent)
   - [Fonctions spécifiques](#fonctions-spécifiques)
   - [Suivre les changements de température du sous-jacent](#suivre-les-changements-de-température-du-sous-jacent)
+  - [Étape suivante](#étape-suivante)
 
 ## Pré-requis
+
+Les équipements pilotables par un _VTherm_ `over_climate` (climatisations, PAC, TRV...) sont listés dans le [catalogue des matériels](https://www.versatile-thermostat.org/fr/devices/?type=climate), et les vannes thermostatiques dans le [catalogue des TRV](https://www.versatile-thermostat.org/fr/devices/?type=trv).
 
 L'installation doit ressembler à ça :
 
@@ -76,7 +79,7 @@ Si votre équipement ne comprend pas le mode Turbo, le mode `Forte` sera utilis�
 Une fois l'écart de température redevenu faible, la ventilation se mettra dans un mode "normal" qui dépend de votre équipement à savoir (dans l'ordre) : `Silence (mute ou quiet)`, `Auto (auto)`, `Faible (low)`. La première valeur qui est possible pour votre équipement sera choisie.
 
 > ![Astuce](images/tips.png) _*Plugin externe*_
-> Une version enrichie de l'auto-fan est disponible sous forme de plugin externe. Ce plugin offre des possibilités de configuration supplémentaires et une gestion plus fine de la ventilation automatique. Consultez la page [plugins](https://www.versatile-thermostat.org/fr/plugins/) pour découvrir ce plugin.
+> Une version enrichie de l'auto-fan est disponible sous forme de plugin externe. Ce plugin offre des possibilités de configuration supplémentaires et une gestion plus fine de la ventilation automatique. Consultez la page [plugins](https://www.versatile-thermostat.org/fr/plugins/#jmcollin78/vtherm_auto_fan_extended) pour découvrir ce plugin.
 
 ### Compenser la température interne du sous-jacent
 
@@ -124,9 +127,21 @@ Si vous êtes dans ce cas, une entité a été ajoutée dans l'appareil _VTherm_
 
 ![Suivre les changements de température](images/entity-follow-under-temp-change.png)
 
-Lorsque cette entité est 'On', tous les changements de température ou d'état faits directement sur l'équipement sous-jacents sont répercutés sur le _VTherm_.
+Lorsque cette entité est 'On', les changements de mode HVAC continuent d'être suivis selon le comportement existant. Le suivi des consignes est actif dès le démarrage, même si _VTherm_ n'a encore rien envoyé au TRV. Une nouvelle consigne observée est retenue comme candidate puis appliquée si elle reste stable pendant 5 secondes ; chaque nouvelle valeur distincte relance ce délai. Les doublons ne le prolongent pas. Si _VTherm_ a déjà envoyé une consigne, les valeurs égales ou trop proches de cette dernière sont considérées comme ambiguës et ne sont pas adoptées automatiquement. Sans consigne envoyée de référence, un ancien écho distinct peut être pris pour un geste manuel.
 
-Attention, si vous utilisez cette fonction, votre équipement est maintenant contrôlé par 2 moyens : _VTherm_ et par vous même directement. Les ordres peuvent être contradictoires et cela peut induire une incompréhension sur l'état de l'équipement. _VTherm_ est équipé d'un mécanisme de temporisation qui évite les boucles : l'utilisateur donne une consigne qui est captée par _VTherm_ qui change la consigne, ... Cette temporisation peut faire que le changement fait directement sur l'équipement est ignoré si ces changements sont trop rapprochés dans le temps.
+Attention, si vous utilisez cette fonction, votre équipement est contrôlé par deux moyens : _VTherm_ et vous-même directement. Les ordres peuvent être contradictoires. Après une consigne TRV admissible, _VTherm_ passe en consigne manuelle (`NONE`) sans créer de nouvel override temporisé et annule l'ancien override sans restaurer l'ancienne demande. Cela ne modifie pas les priorités des fenêtres ou protections. Sous OFF, la consigne demandée est mémorisée sans rallumer le thermostat ni lever un OFF forcé.
+
+Le suivi suspend les nouvelles commandes de température induites après trois tentatives physiques au total pour ce _VTherm_ ; la troisième est envoyée et la quatrième est bloquée. Les commandes directes depuis _VTherm_ restent possibles. Une nouvelle commande reçue par _VTherm_ depuis l'interface ou un service Home Assistant réarme le compteur, même si une automatisation réagit au TRV. Une automatisation qui renvoie une commande à chaque changement peut donc le réarmer à chaque tour : la limite de trois s'applique entre commandes reçues, pas à toute cette boucle. Après un redémarrage de Home Assistant ou un rechargement de l'intégration, le compteur repart à zéro et le suivi est réarmé. Une valeur TRV restaurée sans nouveau changement observé n'est pas adoptée ; dès qu'une nouvelle consigne est rapportée, elle peut être suivie sans attendre un ordre de _VTherm_. Sans référence d'envoi, un ancien écho distinct peut être pris à tort pour un geste.
+
+Un retour ancien, différent de la dernière commande, peut encore être pris à tort pour un geste manuel ; un retour ambigu peut au contraire être écarté. Le délai de 5 secondes n'établit pas l'origine d'un changement et ne garantit ni la capture de tous les gestes ni l'absence de toute boucle entretenue par une automatisation externe.
 
 Certains équipements (Daikin par exemple), changent d'état tout seul. Si la case est cochée, cela peut éteindre le _VTherm_ alors que ce n'est pas ce que vous souhaitiez.
 C'est pour ça qu'il est préférable de ne pas l'utiliser. Cela génère beaucoup d'incompréhensions et de nombreuses demandes de support.
+
+> ![Astuce](images/tips.png) _*Télécommande physique*_
+> Si vous souhaitez utiliser un thermostat physique distinct (un thermostat mural par exemple) comme télécommande d'un _VTherm_, consultez le plugin [VTherm climate replication](https://www.versatile-thermostat.org/fr/plugins/#jmcollin78/vtherm_climate_replication).
+
+## Étape suivante
+
+- Avec l'auto-régulation par contrôle direct de la vanne : configurez la [régulation par vanne](self-regulation.md#auto-régulation-par-contrôle-direct-de-la-vanne), puis les [coefficients du TPI](algorithms.md#configurez-les-coefficients-de-lalgorithme-tpi).
+- Sans contrôle direct de la vanne : réglez si besoin l'[auto-régulation](self-regulation.md#autres-auto-régulation), puis passez aux [presets](feature-presets.md) (menu « Pre-réglages »).

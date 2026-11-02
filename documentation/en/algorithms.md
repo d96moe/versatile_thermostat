@@ -6,8 +6,12 @@
     - [Principle](#principle)
     - [Minimum Activation or Deactivation Delay](#minimum-activation-or-deactivation-delay)
     - [Upper and Lower Activation Thresholds of the Algorithm](#upper-and-lower-activation-thresholds-of-the-algorithm)
+  - [Other Algorithms (Plugins)](#other-algorithms-plugins)
+    - [SmartPI (recommended)](#smartpi-recommended)
+    - [Other Algorithms](#other-algorithms)
   - [The Self-Regulation Algorithm (Without Valve Control)](#the-self-regulation-algorithm-without-valve-control)
   - [The Auto-Start/Stop Function Algorithm](#the-auto-startstop-function-algorithm)
+  - [Next Step](#next-step)
 
 ## The TPI Algorithm
 
@@ -20,7 +24,7 @@ TPI is applicable only for _VTherm_ which does the regulation itself. This kind 
 
 ### Configuring the TPI Algorithm Coefficients
 
-If you have selected a thermostat with a TPI algorithm and choose the "TPI" option in the menu, you will land on this page:
+If your _VTherm_ uses the TPI algorithm, choose the "TPI parameters" option in the menu. A first page asks whether to use the central TPI configuration ("Use central TPI configuration", checked by default when a central configuration exists). Without a central configuration, the box is unchecked and these values are required to finalize the creation. Uncheck the box to enter values specific to this _VTherm_; you then land on this page:
 
 ![image](images/config-tpi.png)
 
@@ -28,12 +32,13 @@ You must provide:
 
 | Parameter | Description | Attribute Name |
 |-----------|-------------|----------------|
-| **Internal Coefficient** | The `coef_int` coefficient of the TPI algorithm. | `tpi_coef_int` |
-| **External Coefficient** | The `coef_ext` coefficient of the TPI algorithm. | `tpi_coef_ext` |
-| **Activation Delay** | Minimum activation time in seconds. | `minimal_activation_delay` |
-| **Deactivation Delay** | Minimum deactivation time in seconds. | `minimal_deactivation_delay` |
-| **High Threshold** | Temperature deviation (°C or K) above which the algorithm will be disabled. | `tpi_threshold_high` |
-| **Low Threshold** | Temperature deviation (°C or K) below which the algorithm will be enabled again. | `tpi_threshold_low` |
+| **Internal Coefficient** | The `coef_int` coefficient of the TPI algorithm. Default: `0.6`. | `tpi_coef_int` |
+| **External Coefficient** | The `coef_ext` coefficient of the TPI algorithm. Default: `0.01`. | `tpi_coef_ext` |
+| **Activation Delay** | Minimum activation time in seconds. Default: `10`. | `minimal_activation_delay` |
+| **Deactivation Delay** | Minimum deactivation time in seconds. Default: `0`. | `minimal_deactivation_delay` |
+| **High Threshold** | Temperature deviation (°C or K) above which the algorithm will be disabled. Default: `0` (disabled). | `tpi_threshold_high` |
+| **Low Threshold** | Temperature deviation (°C or K) below which the algorithm will be enabled again. Default: `0` (disabled). | `tpi_threshold_low` |
+| **Enable Auto TPI Learning** | Learns the TPI coefficients automatically. See [Auto TPI](feature-autotpi.md). | `auto_tpi_mode` |
 
 ### Principle
 
@@ -86,6 +91,18 @@ Examples:
 > 3. In cooling mode, the tests are reversed, but the principle remains the same.
 > 4. The upper threshold should always be greater than the lower threshold, even in cooling mode.
 
+## Other Algorithms (Plugins)
+
+In addition to the built-in TPI algorithm, other control algorithms can be installed as external plugins. They can be used by the _VTherm_ that use the TPI algorithm: `over_switch`, `over_valve` and `over_climate` with direct valve control. Once the plugin is installed, its algorithm can be selected in the algorithm selection field of the configuration.
+
+### SmartPI (recommended)
+
+[SmartPI](https://www.versatile-thermostat.org/en/plugins/#kipk/vtherm_smartpi) is the recommended algorithm plugin. It is an advanced PI controller built around a thermal model of the room: it learns the heating capability of the room, its heat loss rate and its dead time, then uses this model to compute a much more accurate heating command than an algorithm with fixed coefficients such as TPI. See the [SmartPI documentation](https://github.com/KipK/vtherm_smartpi/blob/master/documentation/en/vtherm_smartpi.md).
+
+### Other Algorithms
+
+Other algorithms are available, such as a simple hysteresis algorithm or an algorithm dedicated to pellet stoves. The full list is in the [plugins catalog](https://www.versatile-thermostat.org/en/plugins/?family=algorithm).
+
 ## The Self-Regulation Algorithm (Without Valve Control)
 
 The self-regulation algorithm can be summarized as follows:
@@ -113,3 +130,7 @@ The algorithm used in the auto-start/stop function operates as follows:
 `dt` is set to `30 min` for slow, `15 min` for medium, and `7 min` for fast detection levels.
 
 The function is detailed [here](https://github.com/jmcollin78/versatile_thermostat/issues/585).
+
+## Next Step
+
+[Presets](feature-presets.md): choose in the "Presets" menu whether to use the presets of the central configuration; the temperatures are then set with the entities of the _VTherm_.

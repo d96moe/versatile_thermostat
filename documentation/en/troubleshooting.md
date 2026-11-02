@@ -5,6 +5,7 @@
   - [Using a Heatzy](#using-a-heatzy)
   - [Using a radiator with a pilot wire (Nodon SIN-4-FP-21)](#using-a-radiator-with-a-pilot-wire-nodon-sin-4-fp-21)
   - [Using a Netatmo System](#using-a-netatmo-system)
+  - [The central boiler is not working](#the-central-boiler-is-not-working)
   - [Only the first radiator heats](#only-the-first-radiator-heats)
   - [VTherm percentage and valve opening degree differ](#vtherm-percentage-and-valve-opening-degree-differ)
   - [The radiator heats even though the setpoint temperature is exceeded, or it does not heat when the room temperature is well below the setpoint](#the-radiator-heats-even-though-the-setpoint-temperature-is-exceeded-or-it-does-not-heat-when-the-room-temperature-is-well-below-the-setpoint)
@@ -28,43 +29,11 @@
 
 ## Using a Heatzy
 
-The Heatzy is now natively supported by _VTherm_. See [Quick Start](quick-start.md#heatzy-or-ecosy-or-similar-climate-entity).
-
-This configuration is kept for reference only.
-
-Using a Heatzy or Nodon is possible provided you use a virtual switch with this model:
-
-```yaml
-- platform: template
-  switches:
-    chauffage_sdb:
-      unique_id: chauffage_sdb
-      friendly_name: Bathroom heating
-      value_template: "{{ is_state_attr('climate.bathroom', 'preset_mode', 'comfort') }}"
-      icon_template: >-
-        {% if is_state_attr('climate.bathroom', 'preset_mode', 'comfort') %}
-          mdi:radiator
-        {% elif is_state_attr('climate.bathroom', 'preset_mode', 'away') %}
-          mdi:snowflake
-        {% else %}
-          mdi:radiator-disabled
-        {% endif %}
-      turn_on:
-        service: climate.set_preset_mode
-        entity_id: climate.bathroom
-        data:
-          preset_mode: "comfort"
-      turn_off:
-        service: climate.set_preset_mode
-        entity_id: climate.bathroom
-        data:
-          preset_mode: "eco"
-```
-Thanks to @gael for this example.
+The Heatzy integration exposes a `climate` entity whose state is not the active preset. Use it through a virtual switch, as described on the [Heatzy page](https://www.versatile-thermostat.org/en/devices/heatzy/) of the device catalog.
 
 ## Using a radiator with a pilot wire (Nodon SIN-4-FP-21)
 
-The Nodon is now natively supported by _VTherm_. See [Quick Start](quick-start.md#nodon-sin-4-fp-21-or-similar-pilot-wire).
+The Nodon is natively supported by an `over_switch` _VTherm_ with custom commands: see the [pilot wire modules page](https://www.versatile-thermostat.org/en/devices/pilot-wire-module/) of the device catalog.
 
 This configuration is kept for reference only.
 
@@ -105,7 +74,7 @@ Another more complex example is [here](https://github.com/jmcollin78/versatile_t
 
 ## Using a Netatmo System
 
-The system based on Netatmo TRVs does not work well with _VTherm_. You can find a discussion about the specific behavior of Netatmo systems (in French) here: [https://forum.hacf.fr/t/vannes-netatmo-et-vtherm/56063](https://forum.hacf.fr/t/vannes-netatmo-et-vtherm/56063).
+The system based on Netatmo TRVs does not work well with _VTherm_. You can find a discussion about the specific behavior of Netatmo systems (in French) here: [https://forum.hacf.fr/t/vannes-netatmo-et-vtherm/56063](https://forum.hacf.fr/t/vannes-netatmo-et-vtherm/56063). Its known limitations are also described in the [device catalog](https://www.versatile-thermostat.org/en/devices/known-limitations/).
 
 However, some users have successfully integrated _VTherm_ with Netatmo by incorporating a virtual switch between _VTherm_ and the Netatmo `climate` entity, as follows:
 
@@ -113,6 +82,13 @@ However, some users have successfully integrated _VTherm_ with Netatmo by incorp
 TODO
 ```
 
+
+## The central boiler is not working
+
+If the central boiler does not start when a _VTherm_ requests heating, check the following three items:
+1. The central boiler feature is enabled in the centralized configuration (« Add Central Boiler »).
+2. In the main configuration of each _VTherm_ that should control it, the « Central Boiler Trigger » option is enabled.
+3. Finally, in the centralized configuration entities, the activation threshold by number of devices (`number.boiler_activation_threshold`) or by power (`number.boiler_power_activation_threshold`) is set to an appropriate value greater than zero. Only devices belonging to _VTherm_ marked as central boiler triggers are counted, and the boiler is activated as soon as one of the non-zero thresholds is exceeded. See [central boiler control](feature-central-boiler.md) and [main attributes](base-attributes.md).
 
 ## Only the first radiator heats
 
@@ -174,7 +150,7 @@ Example:
 
 [security mode](images/security-mode-symptome1.png)
 
-If you have installed the [Versatile Thermostat UI Card](https://github.com/jmcollin78/versatile-thermostat-ui-card), the affected VTherm will appear like this:
+If you have installed the [Versatile Thermostat UI Card](https://www.versatile-thermostat.org/en/plugins/#jmcollin78/versatile-thermostat-ui-card), the affected VTherm will appear like this:
 
 [security mode UI Card](images/security-mode-symptome2.png)
 
@@ -247,6 +223,8 @@ To collect and analyze Versatile Thermostat logs, **it is strongly recommended t
 
 See the full documentation: [Download Past Logs - Diagnosis and Troubleshooting](feature-logs-collector.md)
 
+The downloaded file can then be opened in the [log analyzer](https://www.versatile-thermostat.org/en/debugger/) of the website to visualize what happened. When you open an issue, you can also attach an extract exported from the analyzer, zoomed on the period of the problem.
+
 ### Enable logs in Home Assistant (old method)
 
 If you need a more advanced debugging mode, you can enable logs at the Home Assistant level by editing the `logger.yaml` file:
@@ -261,6 +239,8 @@ logger:
 You must reload the YAML configuration (Developer Tools / YAML / Reload all YAML configuration) or restart Home Assistant for this change to take effect.
 
 ⚠️ **Warning**: In debug mode, Versatile Thermostat is very verbose and may slow down Home Assistant or saturate your hard drive. This approach is only recommended for advanced debugging over a short duration. **Prefer the log-collector in all normal cases.**
+
+The `home-assistant.log` file obtained this way can also be opened in the [log analyzer](https://www.versatile-thermostat.org/en/debugger/).
 
 ## VTherm does not track setpoint changes made directly on the underlying device (`over_climate`)
 
