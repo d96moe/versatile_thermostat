@@ -8,7 +8,7 @@ upstream's and is deliberately left untouched for the same reason.
 
 | Job | File | What it does |
 |---|---|---|
-| `versatile-thermostat-sync` | `ci/Jenkinsfile.sync` | Weekly (Monday 03:00): merges `upstream/main` into `native-preset-mode`, pushes, and if anything new came in cuts a fork release for HACS. |
+| `versatile-thermostat-sync` | `ci/Jenkinsfile.sync` | Weekly (Monday 03:00): merges `upstream/main` into `native-preset-mode`, pushes, and if the branch has moved past the latest `v*` tag cuts a fork release for HACS. |
 | `versatile-thermostat` | `ci/Jenkinsfile` | Full pytest suite in a Python venv on the Jenkins agent (`BRANCH` parameter). |
 
 ## Sync job: merge and versioning
@@ -21,7 +21,15 @@ upstream's and is deliberately left untouched for the same reason.
   upstream 10.5.1). If `manifest.json` is the *only* conflicted file and the two
   sides differ in nothing but the `"version"` line, the job takes upstream's
   manifest and continues. Any other conflict aborts the merge and fails the job —
-  resolve it by hand.
+  resolve it by hand (first real one: 2026-11-02, `thermostat_climate.py`
+  `underlying_changed()` vs upstream's debounced underlying-temperature tracking):
+  merge `upstream/main` locally, run the `versatile-thermostat` job on a temporary
+  branch, push `native-preset-mode`, then re-run this job — it releases because
+  the branch is past the latest tag.
+- **When to release** is decided against the latest `v*` tag, not "did this run
+  merge anything", so a by-hand conflict resolution still gets released.
+- Conflict scratch files go to a per-build `mktemp -d` dir (fixed `/tmp` names
+  broke with "Permission denied" on 2026-11-02).
 - **Release version** = patch + 1 on the *higher* of the fork's pre-merge version
   and the merged manifest version, skipping any `vX.Y.Z` tag that already exists.
   So the fork version never goes backwards and never reuses a tag (10.5.2 fork +

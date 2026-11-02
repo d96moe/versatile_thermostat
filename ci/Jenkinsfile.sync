@@ -13,7 +13,8 @@
 // release step re-bumps. Any other conflict aborts the merge and fails the job
 // for manual resolution.
 //
-// If the merge brought in new commits, also cuts a fork release: bumps the
+// If the branch has moved past the latest v* tag (new upstream commits merged
+// by this run, or a conflict resolved by hand and pushed), cuts a fork release: bumps the
 // patch version in manifest.json (from the higher of the fork's and upstream's
 // version, skipping any tag that already exists), tags it, and publishes a GitHub release with
 // the HACS zip asset. HACS picks up the new release on its own refresh cycle —
@@ -51,7 +52,10 @@ pipeline {
                         MANIFEST=custom_components/versatile_thermostat/manifest.json
                         manifest_version() { grep -oP "\\"version\\":\\s*\\"\\K[^\\"]+" "$1"; }
                         FORK_VERSION=$(manifest_version "$MANIFEST")
-                        BEFORE=$(git rev-parse HEAD)
+                        # Per-build scratch dir: fixed /tmp names failed with "Permission
+                        # denied" once a file from an earlier run (other owner) was left there.
+                        SCRATCH=$(mktemp -d)
+                        trap 'rm -rf "$SCRATCH"' EXIT
 
                         if ! git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"; then
                             # The fork bumps its own patch version on every release, so
@@ -59,10 +63,10 @@ pipeline {
                             # exactly that case (take upstream's manifest; the release step
                             # below re-bumps past both versions); anything else still fails.
                             CONFLICTS=$(git diff --name-only --diff-filter=U)
-                            git show ":2:$MANIFEST" 2>/dev/null | grep -v '"version"' > /tmp/vt_manifest_ours || true
-                            git show ":3:$MANIFEST" 2>/dev/null | grep -v '"version"' > /tmp/vt_manifest_theirs || true
-                            if [ "$CONFLICTS" = "$MANIFEST" ] && [ -s /tmp/vt_manifest_theirs ] \
-                                && cmp -s /tmp/vt_manifest_ours /tmp/vt_manifest_theirs; then
+                            git show ":2:$MANIFEST" 2>/dev/null | grep -v '"version"' > "$SCRATCH/manifest_ours" || true
+                            git show ":3:$MANIFEST" 2>/dev/null | grep -v '"version"' > "$SCRATCH/manifest_theirs" || true
+                            if [ "$CONFLICTS" = "$MANIFEST" ] && [ -s "$SCRATCH/manifest_theirs" ] \
+                                && cmp -s "$SCRATCH/manifest_ours" "$SCRATCH/manifest_theirs"; then
                                 echo "=== Only the manifest version line conflicts — taking upstream's manifest ==="
                                 git checkout --theirs "$MANIFEST"
                                 git add "$MANIFEST"
@@ -79,10 +83,15 @@ pipeline {
                         echo "=== Sync done: native-preset-mode is now at ==="
                         git log -1 --oneline
 
-                        if [ "$BEFORE" = "$AFTER" ]; then
-                            echo "No new upstream commits — nothing to release."
+                        # Release whenever the branch has moved past the latest fork release
+                        # tag — not only when this run merged something. A conflict resolved
+                        # by hand and pushed between runs must still produce a release.
+                        LAST_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+                        if [ -n "$LAST_TAG" ] && [ "$(git rev-list -n 1 "$LAST_TAG")" = "$AFTER" ]; then
+                            echo "native-preset-mode is still at $LAST_TAG — nothing to release."
                             exit 0
                         fi
+                        echo "=== native-preset-mode has moved past ${LAST_TAG:-<no tag>} — releasing ==="
 
                         # Bump from the HIGHER of the fork's pre-merge version and the
                         # merged manifest (upstream's, if the conflict was resolved
