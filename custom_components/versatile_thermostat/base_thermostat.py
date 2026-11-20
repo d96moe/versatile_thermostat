@@ -2,12 +2,18 @@
 # pylint: disable=too-many-lines
 # pylint: disable=invalid-name
 """ Implements the VersatileThermostat climate component """
+import asyncio
 import math
 from typing import Optional, Any, Generic
 from datetime import datetime
 from collections.abc import Callable
 
-from vtherm_api import ValveDiagnosticState
+from vtherm_api import (
+    UNDERLYING_HOOK_TIMEOUT_SEC,
+    UnderlyingPowerCommand,
+    ValveCommand,
+    ValveDiagnosticState,
+)
 from vtherm_api.log_collector import get_vtherm_logger
 from homeassistant.util import dt as dt_util
 
@@ -44,8 +50,12 @@ from homeassistant.components.climate.const import (
 
 from homeassistant.const import (
     ATTR_TEMPERATURE,
+    PRECISION_HALVES,
+    PRECISION_TENTHS,
+    PRECISION_WHOLE,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
+    UnitOfTemperature,
 )
 
 from .const import *  # pylint: disable=wildcard-import, unused-wildcard-import
@@ -277,14 +287,22 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
         """
         api = VersatileThermostatAPI.get_vtherm_api(self.hass)
         if api is None or not hasattr(api, "get_feature_manager_factories"):
+            _LOGGER.debug(
+                "%s - external feature managers not loaded: api=%s, has get_feature_manager_factories=%s",
+                self,
+                api is not None,
+                hasattr(api, "get_feature_manager_factories"),
+            )
             return
 
         for factory in api.get_feature_manager_factories():
             name = factory.name
             if name in self._external_manager_names:
+                _LOGGER.debug("%s - external feature manager '%s' already loaded", self, name)
                 continue
             try:
                 if not factory.supports(self):
+                    _LOGGER.debug("%s - external feature manager '%s' not created: supports() returned False", self, name)
                     continue
                 manager = factory.create(self)
                 manager.post_init(self._entry_infos)
@@ -301,6 +319,82 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
             self._external_manager_names.add(name)
             self._external_managers.append(manager)
             _LOGGER.info("%s - Registered external feature manager '%s'", self, name)
+
+    def _is_external_manager_configured(self, manager) -> bool:
+        """Read is_configured of an external manager. A failing manager is considered not configured."""
+        try:
+            return bool(manager.is_configured)
+        except Exception as exc:  # pylint: disable=broad-except
+            _LOGGER.error(
+                "%s - Error while reading is_configured of external feature manager '%s': %s",
+                self,
+                getattr(manager, "name", None),
+                exc,
+            )
+            return False
+
+    async def _async_call_external_hook(self, method_name: str, *args) -> None:
+        """Call an optional hook on each configured external feature manager.
+
+        A failing or slow plugin is logged and never blocks the core command.
+        """
+        for manager in self._external_managers:
+            hook = getattr(manager, method_name, None)
+            if hook is None:
+                _LOGGER.debug("%s - external hook %s skipped for '%s': the manager has no such hook", self, method_name, manager.name)
+                continue
+            if not self._is_external_manager_configured(manager):
+                _LOGGER.debug("%s - external hook %s skipped for '%s': is_configured is False", self, method_name, manager.name)
+                continue
+            _LOGGER.debug("%s - calling external hook %s of '%s'", self, method_name, manager.name)
+            try:
+                async with asyncio.timeout(UNDERLYING_HOOK_TIMEOUT_SEC):
+                    await hook(*args)
+            except TimeoutError:
+                _LOGGER.warning(
+                    "%s - External feature manager '%s' timed out in %s",
+                    self,
+                    manager.name,
+                    method_name,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                _LOGGER.error(
+                    "%s - Error in %s of external feature manager '%s': %s",
+                    self,
+                    method_name,
+                    manager.name,
+                    exc,
+                )
+
+    async def async_before_underlying_hvac_mode(
+        self,
+        climate_entity_id: str,
+        hvac_mode: VThermHvacMode | str,
+        current_hvac_mode: VThermHvacMode | str | None,
+        command_cause: str | None = None,
+    ) -> None:
+        """Notify external managers that an underlying climate is about to change its HVAC mode."""
+        if not self._external_managers:
+            return
+        await self._async_call_external_hook(
+            "async_before_underlying_hvac_mode",
+            climate_entity_id,
+            str(hvac_mode),
+            None if current_hvac_mode is None else str(current_hvac_mode),
+            command_cause,
+        )
+
+    async def async_after_valve_command(self, command: ValveCommand) -> None:
+        """Notify external managers that a valve command was sent to a valve-regulation underlying."""
+        if not self._external_managers:
+            return
+        await self._async_call_external_hook("async_after_valve_command", command)
+
+    async def async_on_underlying_power(self, command: UnderlyingPowerCommand) -> None:
+        """Notify external managers of the power requested from and applied to an underlying."""
+        if not self._external_managers:
+            return
+        await self._async_call_external_hook("async_on_underlying_power", command)
 
     def clean_central_config_doublon(
         self, config_entry: ConfigData, central_config: ConfigEntry | None
@@ -393,11 +487,20 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
             and entry_infos.get(CONF_USE_PRESENCE_FEATURE)
         )
 
+        self._unit = self._hass.config.units.temperature_unit
+
         self._ac_mode = entry_infos.get(CONF_AC_MODE) is True
         self._attr_max_temp = float(entry_infos.get(CONF_TEMP_MAX, 0.0))
         self._attr_min_temp = float(entry_infos.get(CONF_TEMP_MIN, 0.0))
         if (step := entry_infos.get(CONF_STEP_TEMPERATURE)) is not None:
             self._attr_target_temperature_step = step
+            if self._unit == UnitOfTemperature.FAHRENHEIT:
+                if step % 1 == 0:
+                    self._attr_precision = PRECISION_WHOLE
+                elif step % 0.5 == 0:
+                    self._attr_precision = PRECISION_HALVES
+                else:
+                    self._attr_precision = PRECISION_TENTHS
 
         self._attr_preset_modes = []
         self._vtherm_preset_modes = []
@@ -414,8 +517,6 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
         self._ext_temp_sensor_entity_id = entry_infos.get(CONF_EXTERNAL_TEMP_SENSOR)
 
         self.set_hvac_list()
-
-        self._unit = self._hass.config.units.temperature_unit
 
         # Will be restored if possible
         self._state_manager = StateManager()
@@ -1800,6 +1901,8 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
         force=False,
         _command_cause: str | None = None,
         _preserve_underlying_temperature_candidates: bool = False,
+        *,
+        _control_heating: bool = True,
     ):
         """Update the states of the thermostat considering the requested state and the current state"""
         if not self.is_ready:
@@ -1858,10 +1961,11 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
                     force = force or transition_force
                     self.recalculate(force=force)
                     self.reset_last_change_time_from_vtherm()
-                    await self.async_control_heating(
-                        force=force or sub_need_control_heating,
-                        _command_cause=_command_cause,
-                    )
+                    if _control_heating or self.vtherm_hvac_mode == VThermHvacMode_OFF:
+                        await self.async_control_heating(
+                            force=force or sub_need_control_heating,
+                            _command_cause=_command_cause,
+                        )
 
             self.calculate_hvac_action()
             self.update_custom_attributes()

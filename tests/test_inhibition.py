@@ -20,7 +20,7 @@ from homeassistant.components.climate import ATTR_PRESET_MODE
 from homeassistant.exceptions import ServiceNotFound
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.event import async_call_later
-from pytest_homeassistant_custom_component.common import async_fire_time_changed, mock_restore_cache
+from pytest_homeassistant.common import async_fire_time_changed, mock_restore_cache
 
 from custom_components.versatile_thermostat.base_thermostat import BaseThermostat
 from custom_components.versatile_thermostat.inhibition_manager import (
@@ -447,6 +447,38 @@ async def test_switch_exit_off_turns_off_manual_device(hass: HomeAssistant, fake
         spy.reset()
         await advance(hass, vtherm, 1, steps=6)
         assert ("switch", "turn_on") not in spy.services()
+
+
+async def test_switch_repair_does_not_turn_on_when_thermostat_is_off(hass: HomeAssistant, fake_temp_sensor, fake_underlying_switch, caplog):
+    vtherm = await heating_switch_vtherm(hass, fake_temp_sensor)
+    under: UnderlyingSwitch = vtherm.underlying_entity(0)
+
+    with spy_services([SWITCH]) as spy:
+        await vtherm.async_set_hvac_mode(VThermHvacMode_OFF)
+        assert vtherm.hvac_mode == HVACMode.OFF
+        under._is_on_part_running = True
+        assert under.is_device_active is False
+        spy.reset()
+
+        assert await under.check_and_repair() is False
+        assert ("switch", "turn_on") not in spy.services()
+        assert "Skipping switch ON repair because thermostat HVAC mode is OFF" in caplog.text
+
+
+async def test_switch_repair_can_turn_on_when_thermostat_is_heating(hass: HomeAssistant, fake_temp_sensor, fake_underlying_switch):
+    vtherm = await heating_switch_vtherm(hass, fake_temp_sensor)
+    under: UnderlyingSwitch = vtherm.underlying_entity(0)
+
+    with spy_services([SWITCH]) as spy:
+        await under.turn_off()
+        await hass.async_block_till_done()
+        under._is_on_part_running = True
+        assert vtherm.hvac_mode == HVACMode.HEAT
+        assert under.is_device_active is False
+        spy.reset()
+
+        assert await under.check_and_repair() is True
+        assert spy.services() == [("switch", "turn_on")]
 
 
 async def test_switch_exit_heat_with_device_turned_on_by_hand(hass: HomeAssistant, fake_temp_sensor, fake_ext_temp_sensor, fake_underlying_switch):

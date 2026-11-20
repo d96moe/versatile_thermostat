@@ -2,13 +2,13 @@
 
 """ Test the over_climate Vtherm """
 from unittest.mock import AsyncMock, MagicMock, patch, call, PropertyMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import logging
 import pytest
 
 from homeassistant.core import HomeAssistant, State
-from homeassistant.components.climate import ClimateEntityFeature, SERVICE_SET_TEMPERATURE, HVACMode, HVACAction
+from homeassistant.components.climate import ClimateEntityFeature, SERVICE_SET_TEMPERATURE, SERVICE_SET_HVAC_MODE, HVACMode, HVACAction
 
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 
@@ -16,6 +16,7 @@ from custom_components.versatile_thermostat.thermostat_climate import (
     ThermostatOverClimate,
 )
 from custom_components.versatile_thermostat.underlyings import UnderlyingClimate
+from custom_components.versatile_thermostat.feature_repair_incorrect_state_manager import FeatureRepairIncorrectStateManager
 
 from custom_components.versatile_thermostat.switch import (
     FollowUnderlyingTemperatureChange,
@@ -106,13 +107,14 @@ async def test_over_climate_not_initialized(
     entity.remove_thermostat()
 
 
-async def test_over_climate_repair_waits_for_previous_command(
+async def test_over_climate_direct_repair_does_not_wait_for_previous_command(
     hass: HomeAssistant,
     skip_hass_states_is_state,
     skip_turn_on_off_heater,
     skip_send_event,
 ):
-    """Do not resend an HVAC command before the underlying climate can update its state."""
+    """A direct check does not apply the manager's command grace period."""
+
     now = datetime.now(tz=get_tz(hass))
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -136,12 +138,61 @@ async def test_over_climate_repair_waits_for_previous_command(
     underlying._last_command_sent_datetime = now
 
     with patch.object(underlying, "set_hvac_mode", return_value=True) as mock_set_hvac_mode:
-        assert await underlying.check_and_repair() is False
-        mock_set_hvac_mode.assert_not_called()
-
-        entity._set_now(now + timedelta(seconds=2))
         assert await underlying.check_and_repair() is True
         mock_set_hvac_mode.assert_called_once_with(VThermHvacMode_HEAT)
+
+    entity.remove_thermostat()
+
+
+@pytest.mark.parametrize("cached_mode", [VThermHvacMode_HEAT, VThermHvacMode_COOL])
+@pytest.mark.parametrize("under_mode", [VThermHvacMode_OFF, VThermHvacMode_HEAT, VThermHvacMode_COOL])
+@pytest.mark.parametrize("command_age_sec", [0, 2])
+async def test_over_climate_repair_never_turns_on_when_thermostat_is_off(
+    hass: HomeAssistant,
+    skip_hass_states_is_state,
+    skip_turn_on_off_heater,
+    skip_send_event,
+    cached_mode,
+    under_mode,
+    command_age_sec,
+):
+    """An OFF VTherm must never repair a climate back to a stale HEAT/COOL command."""
+    now = datetime.now(tz=get_tz(hass))
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="TheOverClimateMockName",
+        unique_id="uniqueId",
+        data=PARTIAL_CLIMATE_NOT_REGULATED_CONFIG,
+    )
+    await create_and_register_mock_climate(
+        hass, "mock_climate", "MockClimateName", {}, hvac_mode=VThermHvacMode_OFF, hvac_action=HVACAction.OFF
+    )
+    entity = await create_thermostat(hass, entry, "climate.theoverclimatemockname")
+    underlying = entity.underlying_entity(0)
+    entity.current_state.set_hvac_mode(VThermHvacMode_OFF)
+    entity._set_now(now)
+    underlying._hvac_mode = cached_mode
+    underlying._last_command_sent_datetime = now - timedelta(seconds=command_age_sec)
+    observed_state = State(underlying.entity_id, str(under_mode))
+    expect_repair = under_mode != VThermHvacMode_OFF
+
+    with (
+        patch.object(underlying.state_manager, "get_state", return_value=observed_state),
+        patch.object(underlying, "hass_services_async_call", new_callable=AsyncMock) as mock_service_call,
+        patch("custom_components.versatile_thermostat.underlyings.async_call_later") as mock_call_later,
+    ):
+        assert entity.vtherm_hvac_mode == VThermHvacMode_OFF
+        for _ in range(3):
+            assert await underlying.check_and_repair() is expect_repair
+
+        if expect_repair:
+            assert mock_service_call.await_args_list == [
+                call("climate", SERVICE_SET_HVAC_MODE, {"entity_id": underlying.entity_id, "hvac_mode": HVACMode.OFF})
+            ] * 3
+            assert underlying._hvac_mode == VThermHvacMode_OFF
+        else:
+            mock_service_call.assert_not_awaited()
+        mock_call_later.assert_not_called()
 
     entity.remove_thermostat()
 
@@ -1751,6 +1802,44 @@ async def test_multi_climate(
 
 
 @pytest.mark.parametrize(
+    "attributes",
+    [
+        pytest.param(
+            {"target_temperature_high": 26.0, "target_temperature_low": 18.0},
+            id="legacy-keys",
+        ),
+        pytest.param(
+            {
+                "target_temperature_high": 26.0,
+                "target_temperature_low": 18.0,
+                "target_temp_high": 29.0,
+                "target_temp_low": 16.0,
+            },
+            id="both-key-formats",
+        ),
+        pytest.param(
+            {"target_temp_high": 29.0, "target_temp_low": 16.0},
+            id="current-keys-only",
+        ),
+        pytest.param(
+            {"target_temperature_high": 26.0, "target_temp_low": 16.0},
+            id="mixed-keys",
+        ),
+        pytest.param({}, id="no-bounds"),
+    ],
+)
+async def test_underlying_climate_target_temperature_bounds_are_not_exposed(hass: HomeAssistant, attributes):
+    """The underlying climate wrapper does not expose target temperature bounds."""
+    thermostat = MagicMock(spec=ThermostatOverClimate)
+    under = UnderlyingClimate(hass, thermostat, "climate.mock_climate")
+    under._is_initialized = True
+    under._state_manager.get_state = MagicMock(return_value=State("climate.mock_climate", HVACMode.OFF, attributes=attributes))
+
+    assert under.target_temperature_high is None
+    assert under.target_temperature_low is None
+
+
+@pytest.mark.parametrize(
     "last_sent_temperature, regulated_target_temperature, target_temperature, expected_temperature",
     [
         (23.0, 24.0, 28.0, 23.0),
@@ -1855,6 +1944,164 @@ async def test_delayed_temperature_resend_cancelled_on_hvac_off(hass: HomeAssist
     cancel_resend.assert_called_once()
     assert mock_call_later.call_count == 1
     assert under._cancel_set_temperature_later is None
+
+
+@pytest.mark.parametrize("mode", [VThermHvacMode_HEAT, VThermHvacMode_COOL])
+async def test_repair_resends_conforming_temperature_and_restarts_grace(hass: HomeAssistant, mode):
+    """Repair retains #1900 even with a matching setpoint and moves the next repair deadline."""
+    now = datetime.now(timezone.utc)
+    thermostat = MagicMock(spec=ThermostatOverClimate)
+    thermostat.now = now
+    thermostat.name = "thermostat"
+    thermostat.is_ready = True
+    thermostat.vtherm_hvac_mode = mode
+    thermostat.get_underlying_hvac_mode.side_effect = lambda value: value
+    thermostat.target_temperature = 20.0
+    thermostat.regulated_target_temperature = 20.0
+    thermostat.power_manager.check_power_available = AsyncMock(return_value=(True, None))
+    under = UnderlyingClimate(hass, thermostat, "climate.test")
+    under._is_initialized = True
+    under._last_sent_temperature = 20.0
+    attributes = {"supported_features": ClimateEntityFeature.TARGET_TEMPERATURE, "min_temp": 15, "max_temp": 30, "temperature": 20.0}
+    under._state_manager.get_state = MagicMock(return_value=State(under.entity_id, HVACMode.OFF, attributes=attributes))
+    thermostat.all_underlying_entities = [under]
+    manager = FeatureRepairIncorrectStateManager(thermostat, hass)
+    manager.post_init({CONF_REPAIR_INCORRECT_STATE: True})
+    manager._ready_start_time = now - timedelta(seconds=31)
+    callbacks = []
+
+    def schedule(_hass, delay, callback):
+        assert delay == 2
+        callbacks.append(callback)
+        return MagicMock()
+
+    with (
+        patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock) as service,
+        patch("custom_components.versatile_thermostat.underlyings.async_call_later", side_effect=schedule),
+        patch.object(under, "check_and_repair", new=AsyncMock(wraps=under.check_and_repair)) as check,
+    ):
+        assert await manager.check_and_repair() is True
+        assert under.last_command_sent_datetime == now
+        assert len(callbacks) == 1
+        under._state_manager.get_state.return_value = State(under.entity_id, str(mode), attributes=attributes)
+        thermostat.now = now + timedelta(seconds=2)
+        await callbacks[0](None)
+        assert under.last_command_sent_datetime == thermostat.now
+        assert [args.args[1] for args in service.await_args_list] == [SERVICE_SET_HVAC_MODE, SERVICE_SET_TEMPERATURE]
+        assert service.await_args_list[1].args[2]["temperature"] == 20.0
+        thermostat.now = now + timedelta(seconds=11.999)
+        assert await manager.check_and_repair() is False
+        assert check.await_count == 1
+        thermostat.now = now + timedelta(seconds=12)
+        assert await manager.check_and_repair() is False
+        assert check.await_count == 2
+        assert service.await_count == 2
+
+
+async def test_matching_climate_mode_setpoint_difference_does_not_repair(hass: HomeAssistant):
+    """A setpoint mismatch alone is not a climate repair."""
+    now = datetime.now(timezone.utc)
+    thermostat = MagicMock(spec=ThermostatOverClimate)
+    thermostat.now = now
+    thermostat.name = "thermostat"
+    thermostat.is_ready = True
+    thermostat.vtherm_hvac_mode = VThermHvacMode_HEAT
+    thermostat.get_underlying_hvac_mode.side_effect = lambda value: value
+    thermostat.target_temperature = 22
+    under = UnderlyingClimate(hass, thermostat, "climate.test")
+    under._is_initialized = True
+    under._state_manager.get_state = MagicMock(return_value=State(under.entity_id, HVACMode.HEAT, attributes={"temperature": 18}))
+    under._last_command_sent_datetime = now - timedelta(seconds=10)
+    thermostat.all_underlying_entities = [under]
+    manager = FeatureRepairIncorrectStateManager(thermostat, hass)
+    manager.post_init({CONF_REPAIR_INCORRECT_STATE: True})
+    manager._ready_start_time = now - timedelta(seconds=31)
+    with patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock) as service:
+        assert await manager.check_and_repair() is False
+        service.assert_not_awaited()
+
+
+@pytest.mark.parametrize("reason", ["blocked", "failed", "duplicate", "uninitialized"])
+async def test_climate_non_send_preserves_timestamp(hass: HomeAssistant, reason):
+    """Blocked, failed, deduplicated and uninitialized commands do not update the timestamp."""
+    now = datetime.now(timezone.utc)
+    thermostat = MagicMock(spec=ThermostatOverClimate)
+    thermostat.now = now
+    thermostat.get_underlying_hvac_mode.side_effect = lambda value: value
+    under = UnderlyingClimate(hass, thermostat, "climate.test")
+    under._is_initialized = reason != "uninitialized"
+    under._state_manager.get_state = MagicMock(return_value=State(under.entity_id, HVACMode.HEAT))
+    original = under.last_command_sent_datetime
+    with (
+        patch.object(under, "is_command_blocked", return_value=reason == "blocked"),
+        patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock, side_effect=RuntimeError("failure") if reason == "failed" else None) as service,
+        patch("custom_components.versatile_thermostat.underlyings.async_call_later") as schedule,
+    ):
+        if reason == "duplicate":
+            under._hvac_mode = VThermHvacMode_HEAT
+            assert await under.set_hvac_mode(VThermHvacMode_HEAT) is False
+        else:
+            await under.set_humidity(40)
+        assert under.last_command_sent_datetime == original
+        assert service.await_count == int(reason == "failed")
+        schedule.assert_not_called()
+
+
+@pytest.mark.parametrize("mode", [VThermHvacMode_HEAT, VThermHvacMode_COOL])
+async def test_repair_then_off_cancels_temperature_resend(hass: HomeAssistant, mode):
+    """OFF cancels the callback scheduled by a repair without sending temperature."""
+    now = datetime.now(timezone.utc)
+    thermostat = MagicMock(spec=ThermostatOverClimate)
+    thermostat.now = now
+    thermostat.vtherm_hvac_mode = mode
+    thermostat.get_underlying_hvac_mode.side_effect = lambda value: value
+    thermostat.power_manager.check_power_available = AsyncMock(return_value=(True, None))
+    under = UnderlyingClimate(hass, thermostat, "climate.test")
+    under._is_initialized = True
+    under._state_manager.get_state = MagicMock(return_value=State(under.entity_id, HVACMode.OFF))
+    cancel = MagicMock()
+    with (
+        patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock) as service,
+        patch("custom_components.versatile_thermostat.underlyings.async_call_later", return_value=cancel) as schedule,
+    ):
+        assert await under.check_and_repair() is True
+        thermostat.now = now + timedelta(seconds=1)
+        assert await under.set_hvac_mode(VThermHvacMode_OFF) is True
+        cancel.assert_called_once()
+        assert schedule.call_count == 1
+        assert under._cancel_set_temperature_later is None
+        assert [args.args[1] for args in service.await_args_list] == [SERVICE_SET_HVAC_MODE, SERVICE_SET_HVAC_MODE]
+        assert under.last_command_sent_datetime == thermostat.now
+
+
+@pytest.mark.parametrize("age, immediate", [(0, False), (2, False), (2.001, True)])
+async def test_fan_delay_and_timestamp_unchanged(hass: HomeAssistant, age, immediate):
+    """Fan sends remain strictly more than two seconds apart and timestamp only sends."""
+    now = datetime.now(timezone.utc)
+    thermostat = MagicMock(spec=ThermostatOverClimate)
+    thermostat.now = now
+    under = UnderlyingClimate(hass, thermostat, "climate.test")
+    under._is_initialized = True
+    under._last_command_sent_datetime = now - timedelta(seconds=age)
+    original = under.last_command_sent_datetime
+    with (
+        patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock) as service,
+        patch("custom_components.versatile_thermostat.underlyings.async_call_later") as schedule,
+    ):
+        await under.set_fan_mode("high")
+        assert service.await_count == int(immediate)
+        assert schedule.call_count == int(not immediate)
+        assert under.last_command_sent_datetime == (now if immediate else original)
+        if not immediate:
+            assert schedule.call_args.args[1] == 2
+            thermostat.now = original + timedelta(seconds=2)
+            await schedule.call_args.args[2](None)
+            assert service.await_count == 0
+            assert schedule.call_count == 2
+            thermostat.now += timedelta(milliseconds=1)
+            await schedule.call_args.args[2](None)
+            assert service.await_count == 1
+            assert under.last_command_sent_datetime == thermostat.now
 
 
 @pytest.mark.parametrize(
@@ -2019,4 +2266,3 @@ async def test_repeated_turn_off_preserves_last_mode(
     assert entity.hvac_mode == VThermHvacMode_HEAT
 
     entity.remove_thermostat()
-

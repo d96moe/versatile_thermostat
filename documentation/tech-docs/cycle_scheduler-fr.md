@@ -306,6 +306,8 @@ Si l'activation ne peut pas avoir lieu (conditions non remplies), on procède à
 
 3. Le temps de chauffe non réalisé est ajouté à `penalty` (valeur positive = temps de chauffe perdu).
 
+Lorsque seule la désactivation minimale retarde l'activation (`under_dt < minimal_deactivation_delay` et `state_duration > minimal_activation_delay`) et que la fenêtre ne boucle pas, `off_t` est décalé de la même durée que `on_t`. La durée d'activation prévue est conservée, et seule la partie qui ne tient plus dans le cycle est ajoutée à `penalty`. Que le dernier changement d'état soit un ré-horodatage au démarrage de Home Assistant ou un arrêt réel, la désactivation minimale est respectée sans perdre la phase ON.
+
 Un nouveau tick est planifié au moment du nouveau `on_t`.
 
 ---
@@ -574,6 +576,23 @@ Cet appel est indépendant du callback `on_cycle_started` (qui se déclenche uni
 - Altérations : `MIN_ON_OFF` quand `calculate_cycle_times()` signale `forced_by_timing` (switch) ; `VALVE_RETAINED` quand l'ouverture retenue diffère de la demande arrondie au pourcent entier. Elles sont conservées par le redémarrage automatique et par une requête ultérieure portant le même `request_id`.
 - Aucun reçu n'est émis tant que le thermostat est inhibé (`is_inhibited`) : la barrière de commandes abandonne les commandes vers les sous-jacents, donc aucune n'est appliquée. Pendant la réconciliation de sortie, le thermostat n'est plus inhibé et les commandes passent : leurs reçus sont émis.
 - Les callbacks sont attendus dans l'ordre d'enregistrement ; une exception est journalisée en warning et ne casse pas le cycle.
+
+### 13.8 Hook de puissance des sous-jacents
+
+`CycleScheduler._fire_underlying_power()` appelle `async_on_underlying_power(command)` (`vtherm_api` 0.9.0, issue #2181) sur les feature managers externes configurés, via `BaseThermostat.async_on_underlying_power()`. Elle construit un `UnderlyingPowerCommand` par sous-jacent (`underlying_type` vaut `switch`, `valve` ou `valve_regulation` ; `climate_entity_id` n'est renseigné que pour `valve_regulation`). C'est une notification : elle ne modifie jamais le cycle. Elle est distincte des reçus de commande appliquée du 13.7 : le reçu décrit le thermostat entier et sert au plugin d'algorithme, le hook décrit chaque sous-jacent et sert aux feature managers.
+
+| Type          | Émission                                                                                                                                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CYCLE_START` | Dans `start_cycle()`, après `_start_cycle_switch()` ou `_start_cycle_valve()` (donc après l'actionnement), y compris le redémarrage automatique (`is_repeat=True`). Pour un switch, `start_offset_sec` est lu dans `self._states` rempli par `_init_cycle()` ; il vaut `None` pour les branches 0 % et 100 % et pour une vanne. |
+| `UPDATE`      | Vanne uniquement : dans `_update_running_valve_cycle()` et `apply_valve_update()`, après `_apply_valve_command()`, même à valeur inchangée.                                                                                  |
+| `STOP`        | Dans `_cancel_cycle_impl()` quand un cycle tournait, avec `applied_on_percent=0`. Une annulation interne suivie d'un redémarrage (`start_cycle()`, `_restarting=True`) n'envoie pas de `STOP` : le `CYCLE_START` suit.      |
+
+- `requested_on_percent`, `applied_on_percent` et `is_repeat` sont les valeurs données à `_fire_command_receipt()`, pour que les deux notifications restent cohérentes.
+- `cycle_start_monotonic` vaut `self._cycle_start_monotonic`, la même valeur que `AppliedCommandReceipt.cycle_start_monotonic`, et `monotonic` vaut `time.monotonic()` à la construction de la commande. `cycle_start_monotonic` vaut `None` quand aucun cycle ne tourne : toujours pour `STOP` (le début de cycle est effacé avant la notification) et pour un `UPDATE` émis hors cycle.
+- Les bascules on/off d'un switch pendant le cycle ne sont pas notifiées. Dans `_init_cycle()` et `_tick()`, un switch s'allume à `cycle_start_monotonic + start_offset_sec` et s'éteint `on_time_sec` plus tard (modulo la durée du cycle : l'extinction revient au début du cycle quand la période ON franchit la fin). Ces instants sont nominaux : les délais minimaux d'activation et de désactivation peuvent décaler une bascule.
+- La notification peut arriver après l'actionnement, car les managers sont attendus l'un après l'autre (jusqu'à `UNDERLYING_HOOK_TIMEOUT_SEC` chacun). Un manager doit utiliser `cycle_start_monotonic` et `monotonic`, pas son heure de réception.
+- Rien n'est envoyé sans feature manager externe, si le thermostat n'a pas de coroutine `async_on_underlying_power` (doubles de test) ou tant qu'il est inhibé (`is_inhibited`).
+- Chaque appel est coupé après `UNDERLYING_HOOK_TIMEOUT_SEC` ; une exception ou un dépassement de délai est journalisé et ne casse pas le cycle.
 
 ---
 

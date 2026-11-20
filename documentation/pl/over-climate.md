@@ -107,8 +107,12 @@ Funkcje wymagające konfiguracji dla tego typu termostatu to:
 > 1. AutoSTART/autoSTOP: Automatyczne uruchamianie i zatrzymywanie termostatu na podstawie prognoz użytkowania. Opis znajduje się [tutaj](feature-auto-start-stop.md).
 > 2. Jeśli wybrano regulację zaworu, konfiguracja algorytmu TPI jest dostępna z poziomu menu (patrz: [Algorytmy](algorithms.md)).
 > 3. Jeśli wybrano regulację zaworu, możesz ustawić termostat w tryb uśpienia. Tryb uśpienia jest specyficzny dla tego typu termostatu i pozwala wyłączyć go, pozostawiając zawór całkowicie otwarty (100%). Istnieją dwa sposoby aktywacji trybu uśpienia:
->    1. za pomocą [karty VTherm UI Card](additions.md#versatile-thermostat-ui-card), naciskając przycisk trybu 'Zzz',
->    2. wywołując akcję o nazwie `service_set_hvac_mode_sleep`. Zobacz [Akcje](reference.md#actions-services)
+>
+>    > [!NOTE]
+>    > Tryb uśpienia (`sleep` / `Zzz`) wymaga karty kompatybilnej z Versatile Thermostat, takiej jak [Versatile Thermostat UI Card](additions.md#karta-versatile-thermostat-ui-card). Domyślna karta termostatu (climate) Home Assistant nie jest obsługiwana: wyświetla `sleep` w `hvac_modes`, ale nie pozwala go wybrać (`climate.set_hvac_mode` odrzuca `sleep`, który nie jest standardowym `HVACMode` HA).
+>
+>    1. za pomocą [karty VTherm UI Card](additions.md#karta-versatile-thermostat-ui-card), naciskając przycisk trybu 'Zzz',
+>    2. wywołując akcję o nazwie `service_set_hvac_mode_sleep`. Zobacz [Akcje](reference.md#akcje-usługi)
 
 ## Śledzenie zmian temperatury bazowej
 
@@ -117,10 +121,18 @@ W takim przypadku do urządzenia _VTherm_ dodano sensor "Śledzenie zmiany tempe
 
 ![Track temperature changes](images/entity-follow-under-temp-change.png)
 
-Gdy ta opcja jest aktywna, wszystkie zmiany temperatury lub stanu dokonane bezpośrednio na sterowanym urządzeniu są odzwierciedlane w termostacie VTherm.
+Gdy ta opcja jest włączona, zmiany trybu HVAC są nadal śledzone. Śledzenie temperatury zadanej działa od uruchomienia, nawet jeśli _VTherm_ nie wysłał jeszcze polecenia do TRV. Nowo zgłoszona temperatura zadana jest zapisywana jako kandydat i przyjmowana, jeśli pozostaje stabilna przez pięć sekund; każda nowa, inna wartość rozpoczyna oczekiwanie od nowa. Duplikaty nie wydłużają tego czasu. Jeśli _VTherm_ wysłał już temperaturę zadaną, równe lub zbliżone wartości są uznawane za niejednoznaczne i nie są automatycznie przyjmowane. Bez odniesienia do wysłanej temperatury zadanej stary, odmienny sygnał zwrotny może zostać błędnie uznany za ręczną zmianę.
+
+Dozwolona zmiana na TRV jest traktowana jak ręczna zmiana temperatury docelowej: _VTherm_ przechodzi na ręczną temperaturę zadaną (`NONE`). Jeśli skonfigurowano [czas ręcznego nadpisania](feature-timed-preset.md#ręczne-nadpisanie-z-automatycznym-powrotem), uruchamia ono ręczne nadpisanie, po którego zakończeniu przywracany jest poprzedni preset. Bez takiego czasu bieżący preset czasowy jest anulowany bez przywracania poprzedniego żądania. Priorytety okien i zabezpieczeń pozostają bez zmian. W stanie OFF żądanie zostaje zapisane bez włączania termostatu i bez anulowania wymuszonego OFF.
+
+Budżet śledzenia to jeden wspólny licznik dla każdego _VTherm_. Zlicza każdą faktycznie przyjętą zmianę żądanego trybu lub temperatury z urządzenia bazowego, a także każdą wychodzącą próbę polecenia `climate` wywołaną przez śledzenie. Przyjęcie zmiany i wynikające z niego polecenie mogą więc zużyć dwie jednostki. Samo zaobserwowanie kandydata lub oczekiwanie na jego ustabilizowanie nie jest zliczane. Wywołania usług `number` używane przez bezpośrednią regulację zaworu nie są uwzględniane.
+
+Po osiągnięciu trzech jednostek śledzenie zostaje zawieszone. Jeśli trzecią jednostką jest wychodząca próba, to polecenie zostaje wysłane, a następna próba jest blokowana. Jeśli przyjęcie zmiany podniesie licznik do trzech, zmiana zostaje zachowana, ale kolejne polecenia wywołane przez śledzenie są blokowane. Bezpośrednie sterowanie z _VTherm_ pozostaje dostępne. Licznik jest ponownie uzbrajany po otrzymaniu nowego polecenia przez interfejs _VTherm_ lub usługę Home Assistant. Fizyczne zmiany na urządzeniu bazowym i zwykłe cykle regulacji go nie resetują; reset czasowy nie występuje. Automatyzacja wysyłająca nowe polecenie do _VTherm_ po każdej zmianie może ponownie uzbrajać licznik przy każdym przebiegu, dlatego limit obowiązuje między odebranymi poleceniami, a nie dla całej pętli. Po ponownym uruchomieniu Home Assistant lub przeładowaniu integracji licznik zaczyna od zera, a śledzenie zostaje ponownie uzbrojone.
 
 **Uważaj** — jeśli korzystasz z tej funkcji, Twoje urządzenie jest sterowane na dwa sposoby: przez termostat _VTherm_ oraz bezpośrednio przez Ciebie. Polecenia mogą się wzajemnie wykluczać, co może prowadzić do niejednoznaczności aktualnego stanu urządzenia.
 Termostat _VTherm_ posiada mechanizm opóźnienia, który zapobiega zapętleniom: użytkownik ustawia żądaną wartość, termostat _VTherm_ ją przechwytuje i odpowiednio zmienia wartość. To opóźnienie może powodować zignorowanie zmiany dokonanej bezpośrednio na urządzeniu, jeśli nastąpi w zbyt krótkim czasie.
 
 Niektóre urządzenia (np. Daikin) zmieniają stan samodzielnie. Jeśli zaznaczono tę opcję, może to spowodować wyłączenie termostatu _VTherm_, mimo że nie było to zamierzone. Dlatego lepiej jej nie używać — generuje to wiele niejasności i niepotrzebnych zapytań o wsparcie techniczne.
+
+Te ograniczenia są celowym kompromisem między bezpieczeństwem a wygodą użytkowania. Z założenia są restrykcyjne i nie można ich konfigurować. Nie zostaną zmienione; trzeba będzie zaakceptować te ograniczenia.
 

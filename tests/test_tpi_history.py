@@ -1,5 +1,7 @@
 """HA history adapter tests: native State events and duration accounting."""
 
+from .tpi_runtime import native_runtime
+
 from datetime import datetime, timedelta, UTC
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -103,8 +105,8 @@ def test_missing_and_nonoverlapping_histories():
     [
         ("tpi", {}, False, True),
         ("smartpi", {}, False, False),
-        ("tpi", {"auto_tpi_mode": True}, False, False),
-        ("tpi", {"auto_tpi_continuous_kext": True}, False, False),
+        ("tpi", {"auto_tpi_mode": True}, False, True),
+        ("tpi", {"auto_tpi_continuous_kext": True}, False, True),
         ("tpi", {}, True, False),
     ],
 )
@@ -114,6 +116,7 @@ def test_classic_tpi_only(function, config, learning, accepted):
         entry_infos=config,
         auto_tpi_manager=SimpleNamespace(learning_active=learning),
     )
+    native_runtime(thermostat, learning=learning)
     if accepted:
         TPIHistory.check_classic_tpi(thermostat)
     else:
@@ -178,6 +181,7 @@ def test_source_resolution_multiple_switches_and_unsupported_virtual():
             "underlying_entity_ids": ["switch.first", "switch.second"],
         },
     )
+    native_runtime(thermostat)
     entries = [
         SimpleNamespace(
             domain="binary_sensor",
@@ -210,7 +214,7 @@ def mock_recorder_before_hass(recorder_db_url):
 @pytest.mark.freeze_time("2026-10-01 00:00:00")
 async def test_native_recorder_roundtrip(recorder_mock, hass, freezer):
     """Read real Recorder State objects through the public history API."""
-    from pytest_homeassistant_custom_component.components.recorder.common import (
+    from pytest_homeassistant.components.recorder.common import (
         async_wait_recording_done,
     )
     from custom_components.versatile_thermostat.tpi_history import TPIHistory
