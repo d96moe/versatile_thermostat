@@ -18,9 +18,12 @@ upstream's and is deliberately left untouched for the same reason.
 - **Version-line conflicts are resolved automatically.** The fork bumps its own
   patch version in `manifest.json` on every release, so every new upstream
   release conflicts on that one line (first hit 2026-10-12: fork 10.5.2 vs
-  upstream 10.5.1). If `manifest.json` is the *only* conflicted file and the two
-  sides differ in nothing but the `"version"` line, the job takes upstream's
-  manifest and continues. Any other conflict aborts the merge and fails the job —
+  upstream 10.5.1). If `manifest.json` is the *only* conflicted file and the
+  fork's side differs from the merge base in nothing but the `"version"` line
+  (i.e. the fork carries no manifest changes of its own), the job takes
+  upstream's manifest — including upstream edits next to the version, such as
+  the 2026-11-16 `vtherm_api>=0.7.0` → `>=0.9.0` requirements bump that the older
+  ours-vs-theirs rule refused — and continues. Any other conflict aborts the merge and fails the job —
   resolve it by hand (first real one: 2026-11-02, `thermostat_climate.py`
   `underlying_changed()` vs upstream's debounced underlying-temperature tracking):
   merge `upstream/main` locally, run the `versatile-thermostat` job on a temporary

@@ -8,8 +8,9 @@
 //
 // Every new upstream release conflicts on manifest.json's "version" line (the
 // fork bumps its own patch version on each release). That one case is resolved
-// automatically: if manifest.json is the only conflicted file and ours/theirs
-// differ in nothing but the version line, upstream's manifest is taken and the
+// automatically: if manifest.json is the only conflicted file and the fork's
+// side differs from the merge base in nothing but the version line, upstream's
+// manifest is taken (with any other upstream edits, e.g. requirements) and the
 // release step re-bumps. Any other conflict aborts the merge and fails the job
 // for manual resolution.
 //
@@ -59,15 +60,21 @@ pipeline {
 
                         if ! git merge upstream/main -m "Merge upstream jmcollin78/main into native-preset-mode"; then
                             # The fork bumps its own patch version on every release, so
-                            # each new upstream release conflicts on that one line. Resolve
-                            # exactly that case (take upstream's manifest; the release step
-                            # below re-bumps past both versions); anything else still fails.
+                            # each new upstream release conflicts on manifest.json. If the
+                            # fork's side differs from the merge base in nothing but the
+                            # version line, the fork has no manifest changes of its own, so
+                            # upstream's manifest is always the right answer — including
+                            # upstream edits next to the version (e.g. a requirements bump,
+                            # 2026-11-16: vtherm_api>=0.7.0 -> >=0.9.0). The release step
+                            # below re-bumps past both versions. Anything else still fails.
                             CONFLICTS=$(git diff --name-only --diff-filter=U)
+                            git show ":1:$MANIFEST" 2>/dev/null | grep -v '"version"' > "$SCRATCH/manifest_base" || true
                             git show ":2:$MANIFEST" 2>/dev/null | grep -v '"version"' > "$SCRATCH/manifest_ours" || true
                             git show ":3:$MANIFEST" 2>/dev/null | grep -v '"version"' > "$SCRATCH/manifest_theirs" || true
                             if [ "$CONFLICTS" = "$MANIFEST" ] && [ -s "$SCRATCH/manifest_theirs" ] \
-                                && cmp -s "$SCRATCH/manifest_ours" "$SCRATCH/manifest_theirs"; then
-                                echo "=== Only the manifest version line conflicts — taking upstream's manifest ==="
+                                && [ -s "$SCRATCH/manifest_base" ] \
+                                && cmp -s "$SCRATCH/manifest_ours" "$SCRATCH/manifest_base"; then
+                                echo "=== Fork changed only the manifest version line — taking upstream's manifest ==="
                                 git checkout --theirs "$MANIFEST"
                                 git add "$MANIFEST"
                                 git commit --no-edit
