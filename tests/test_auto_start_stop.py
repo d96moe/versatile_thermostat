@@ -569,6 +569,8 @@ async def test_auto_start_stop_medium_heat_vtherm(
     )
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
 
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
@@ -814,6 +816,8 @@ async def test_auto_start_stop_fast_ac_vtherm(
     )
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
 
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
@@ -1415,6 +1419,8 @@ async def test_auto_start_stop_medium_heat_vtherm_preset_change_enable_false(
     )
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
 
     assert vtherm._attr_extra_state_attributes["auto_start_stop_manager"].get("auto_start_stop_enable") is True
 
@@ -1546,6 +1552,8 @@ async def test_auto_start_stop_fast_heat_window(
     )
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
 
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
@@ -1717,6 +1725,8 @@ async def test_auto_start_stop_fast_heat_window_mixed(
     )
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
     # post_init leaves _is_auto_start_stop_enabled=False; simulate switch entity restoring state
     await vtherm.auto_start_stop_manager.set_auto_start_stop_enable(True)
 
@@ -1896,6 +1906,8 @@ async def test_auto_start_stop_disable_vtherm_off(
     enable_entity = search_entity(hass, "switch.overclimate_enable_auto_start_stop", SWITCH_DOMAIN)
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
     # post_init leaves _is_auto_start_stop_enabled=False; simulate switch entity restoring state
     await vtherm.auto_start_stop_manager.set_auto_start_stop_enable(True)
 
@@ -2048,6 +2060,8 @@ async def test_auto_start_stop_dry_stop_mode_uses_ac_preset_temp(hass: HomeAssis
     )
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
 
     # Use DRY as the auto-start/stop stop mode — through the stop-mode select, as a
     # user would. Setting it directly on the manager raced with the select entity:
@@ -2315,6 +2329,8 @@ async def test_auto_start_stop_cool_activity_window_keeps_auto_stop(hass: HomeAs
     assert vtherm is not None
 
     await set_all_climate_preset_temp(hass, vtherm, temps, "overclimate")
+    # the switch's value must have reached the MANAGER too, not only the switch's own HA state: flipping the flag runs refresh_state(), and a late flip injects an extra auto-start/stop calculation into the test (fork CI 2026-11-23)
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
 
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
