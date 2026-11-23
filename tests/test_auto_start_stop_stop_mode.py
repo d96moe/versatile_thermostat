@@ -161,6 +161,13 @@ async def test_stop_mode_select_options_filtered_by_underlying(
 async def _drive_to_auto_stop(hass: HomeAssistant, vtherm: ThermostatOverClimate, now: datetime) -> datetime:
     """Drive the VTherm through the temperature sequence that triggers an auto-stop.
     Returns the last 'now' used."""
+    # The enable switch's value must have reached the manager BEFORE driving:
+    # flipping the flag runs refresh_state(), and a flip landing mid-sequence
+    # shortened the next calculation's time step (accumulated error -2.0 instead
+    # of -7.5) so no stop was detected. Measured on the fork CI 2026-11-23:
+    # ~1 in 15 runs failed without this wait, 0 of 80 with it.
+    await wait_for_local_condition(lambda: vtherm.auto_start_stop_manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
+
     # Set mode to Heat and preset to Comfort (target 19)
     await send_presence_change_event(vtherm, True, False, now)
     await send_temperature_change_event(vtherm, 18, now, True)
