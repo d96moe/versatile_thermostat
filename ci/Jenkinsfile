@@ -26,8 +26,14 @@ pipeline {
 
         stage('Test') {
             steps {
+                // --clear: the workspace .venv persists between builds and plain
+                // `venv .venv` keeps every old package. A stale
+                // pytest_homeassistant_custom_component plugin from an earlier build
+                // crashed pytest at startup against HA 2026.11.0 (#42) — and the
+                // stale test-results.xml from a previous run still showed 1057 passed.
                 sh """
-                    /usr/local/bin/python3.14 -m venv .venv
+                    rm -f test-results.xml
+                    /usr/local/bin/python3.14 -m venv --clear .venv
                     .venv/bin/pip install --upgrade pip
                     .venv/bin/pip install -r requirements_test.txt
                     .venv/bin/python3.14 -m pytest tests/ \
