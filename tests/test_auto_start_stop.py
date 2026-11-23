@@ -11,6 +11,7 @@ from homeassistant.components.climate import (
     SERVICE_SET_PRESET_MODE,
 )
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 
 from custom_components.versatile_thermostat.thermostat_climate import (
     ThermostatOverClimate,
@@ -2048,8 +2049,18 @@ async def test_auto_start_stop_dry_stop_mode_uses_ac_preset_temp(hass: HomeAssis
     assert enable_entity is not None
     assert enable_entity.state == STATE_ON
 
-    # Use DRY as the auto-start/stop stop mode
-    await vtherm.auto_start_stop_manager.set_auto_start_stop_stop_mode(AUTO_START_STOP_STOP_MODE_DRY)
+    # Use DRY as the auto-start/stop stop mode — through the stop-mode select, as a
+    # user would. Setting it directly on the manager raced with the select entity:
+    # when that select finds its VTherm a little later (lookup retried every second)
+    # it pushes its own option (OFF) and silently overwrote DRY -> the VTherm then
+    # stopped to OFF instead of DRY (intermittent failure below, fork CI 2026-11-23).
+    stop_mode_select = search_entity(
+        hass, "select.overclimate_auto_start_stop_stop_mode", SELECT_DOMAIN
+    )
+    assert stop_mode_select is not None
+    await stop_mode_select.async_select_option(AUTO_START_STOP_STOP_MODE_DRY)
+    await hass.async_block_till_done()
+    assert vtherm.auto_start_stop_manager._stop_mode == AUTO_START_STOP_STOP_MODE_DRY
 
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
