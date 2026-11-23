@@ -2172,6 +2172,78 @@ async def test_auto_start_stop_is_auto_stop_detected_respects_enabled(
     vtherm.remove_thermostat()
 
 
+def _enable_flag_config_entry(name: str, unique: str, underlying: str) -> MockConfigEntry:
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="TheOverClimateMockName",
+        unique_id=unique,
+        data={
+            CONF_NAME: name,
+            CONF_TEMP_SENSOR: "sensor.mock_temp_sensor",
+            CONF_THERMOSTAT_TYPE: CONF_THERMOSTAT_CLIMATE,
+            CONF_EXTERNAL_TEMP_SENSOR: "sensor.mock_ext_temp_sensor",
+            CONF_CYCLE_MIN: 5,
+            CONF_TEMP_MIN: 15,
+            CONF_TEMP_MAX: 30,
+            CONF_USE_WINDOW_FEATURE: False,
+            CONF_USE_MOTION_FEATURE: False,
+            CONF_USE_POWER_FEATURE: False,
+            CONF_USE_AUTO_START_STOP_FEATURE: True,
+            CONF_USE_PRESENCE_FEATURE: False,
+            CONF_UNDERLYING_LIST: [f"climate.{underlying}"],
+            CONF_MINIMAL_ACTIVATION_DELAY: 30,
+            CONF_MINIMAL_DEACTIVATION_DELAY: 0,
+            CONF_SAFETY_DELAY_MIN: 5,
+            CONF_SAFETY_MIN_ON_PERCENT: 0.3,
+            CONF_AUTO_FAN_MODE: CONF_AUTO_FAN_NONE,
+            CONF_AC_MODE: False,
+            CONF_AUTO_START_STOP_LEVEL: AUTO_START_STOP_LEVEL_FAST,
+        },
+    )
+
+
+async def test_auto_start_stop_enable_flag_survives_reinit(hass: HomeAssistant):
+    """Regression (fork): post_init runs again on every reinit (options change). It
+    used to reset _is_auto_start_stop_enabled to False, so auto-start/stop was
+    silently disabled while the enable switch still showed ON."""
+    await create_and_register_mock_climate(hass, "mock_climate3", "mock_climate3", {}, hvac_modes=["off", "cool", "heat"])
+    vtherm: ThermostatOverClimate = await create_thermostat(hass, _enable_flag_config_entry("overClimate3", "overClimateUniqueId3", "mock_climate3"), "climate.overclimate3")
+    assert vtherm is not None
+    manager = vtherm.auto_start_stop_manager
+
+    # The switch (default ON for a FAST level) must get its value to the manager —
+    # whether it found the VTherm when it was added or only later.
+    await wait_for_local_condition(lambda: manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
+
+    manager.post_init(vtherm._entry_infos)  # what a reinit does
+    assert manager._is_auto_start_stop_enabled, "post_init must not reset the enable flag the switch set"
+
+    vtherm.remove_thermostat()
+
+
+async def test_auto_start_stop_switch_pushes_state_when_vtherm_found_late(hass: HomeAssistant):
+    """Regression (fork): when the enable switch is added before its VTherm is
+    registered (platforms set up in parallel), update_my_state_and_vtherm() cannot
+    reach the manager. The switch must push its restored value once the VTherm is
+    found (my_climate_is_initialized), or the flag stays False forever."""
+    await create_and_register_mock_climate(hass, "mock_climate4", "mock_climate4", {}, hvac_modes=["off", "cool", "heat"])
+    vtherm: ThermostatOverClimate = await create_thermostat(hass, _enable_flag_config_entry("overClimate4", "overClimateUniqueId4", "mock_climate4"), "climate.overclimate4")
+    assert vtherm is not None
+    manager = vtherm.auto_start_stop_manager
+    switch = search_entity(hass, "switch.overclimate4_enable_auto_start_stop", SWITCH_DOMAIN)
+    assert switch is not None and switch.is_on
+
+    # Replay "switch restored, VTherm not found yet": flag lost, no climate cached
+    manager._is_auto_start_stop_enabled = False
+    switch._my_climate = None
+
+    # The base entity's lookup (retried every second) finds the VTherm
+    assert switch.my_climate is vtherm
+    await wait_for_local_condition(lambda: manager._is_auto_start_stop_enabled, timeout=3.0, hass=hass)
+
+    vtherm.remove_thermostat()
+
+
 async def test_auto_start_stop_cool_activity_window_keeps_auto_stop(hass: HomeAssistant, skip_hass_states_is_state):
     temps = {
         "frost": 7.0,

@@ -61,6 +61,10 @@ class AutoStartStopEnable(VersatileThermostatBaseEntity, SwitchEntity, RestoreEn
             != AUTO_START_STOP_LEVEL_NONE
         )
         self._attr_is_on = self._default_value
+        # True once the persisted state is restored — only then may the value be
+        # pushed to the VTherm (pushing the default before the restore is the
+        # startup race that briefly turned the underlying off).
+        self._state_restored = False
 
     @property
     def icon(self) -> str | None:
@@ -80,7 +84,21 @@ class AutoStartStopEnable(VersatileThermostatBaseEntity, SwitchEntity, RestoreEn
             # If no previous state set it to false by default
             self._attr_is_on = self._default_value
 
+        self._state_restored = True
         await self.update_my_state_and_vtherm()
+
+    @callback
+    def my_climate_is_initialized(self):
+        """The VTherm was found AFTER this switch was added (platforms set up in
+        parallel): update_my_state_and_vtherm() could not reach it then, so the
+        manager would keep _is_auto_start_stop_enabled=False forever while this
+        switch shows ON. Push the restored value now."""
+        if not self._state_restored:
+            return  # async_added_to_hass pushes it right after the restore
+        if self._my_climate is not None and self._my_climate.auto_start_stop_manager is not None:
+            self.hass.async_create_task(
+                self._my_climate.auto_start_stop_manager.set_auto_start_stop_enable(self._attr_is_on)
+            )
 
     async def update_my_state_and_vtherm(self):
         """Update the auto_start_stop_enable flag in my VTherm"""

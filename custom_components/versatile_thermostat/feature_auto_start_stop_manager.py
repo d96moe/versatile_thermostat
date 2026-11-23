@@ -66,15 +66,17 @@ class FeatureAutoStartStopManager(BaseFeatureManager):
             self._auto_start_stop_level = AUTO_START_STOP_LEVEL_NONE
             self._is_configured = False
 
-        # Do NOT pre-initialize _is_auto_start_stop_enabled here.
-        # It starts as False (set in __init__) and the AutoStartStopEnable switch
-        # entity sets the correct value via set_auto_start_stop_enable() once it
-        # has restored its persisted state in async_added_to_hass.
-        # Pre-initializing to True caused a startup race: _is_auto_stop_detected
-        # could be True (restored from previous run) while the switch hadn't yet
-        # restored its persisted False, making is_auto_stop_detected return True
-        # and turning off the underlying climate unexpectedly.
-        self._is_auto_start_stop_enabled = False
+        # Do NOT touch _is_auto_start_stop_enabled here — neither pre-initialize it
+        # nor reset it. It starts as False (set in __init__) and the
+        # AutoStartStopEnable switch entity sets the correct value via
+        # set_auto_start_stop_enable() once it has restored its persisted state.
+        # * Pre-initializing to True caused a startup race: _is_auto_stop_detected
+        #   could be True (restored from previous run) while the switch hadn't yet
+        #   restored its persisted False, turning off the underlying climate.
+        # * Resetting to False here (fork 7b8d32a) caused the opposite: post_init
+        #   also runs on every reinit (options change), wiping the value the switch
+        #   had already set — auto-start/stop silently disabled while the switch
+        #   still showed ON, until the user toggled it.
 
         # Instanciate the auto start stop algo
         self._auto_start_stop_algo = AutoStartStopDetectionAlgorithm(
